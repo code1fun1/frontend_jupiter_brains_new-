@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSession } from '@/types/chat';
 import { cn } from '@/lib/utils';
-import JupiterBrainsLogo from '@/components/icons/JupiterBrainsLogo';
+import jupiterBrainsLogo from '@/assets/jupiter-brains-logo.png';
 
 interface ChatSidebarProps {
   sessions: ChatSession[];
@@ -117,7 +117,7 @@ export function ChatSidebar({
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
-            <JupiterBrainsLogo className="w-7 h-7 text-sidebar-foreground" />
+            <img src={jupiterBrainsLogo} alt="JupiterBrains" className="w-7 h-7" />
             <span className="font-semibold text-sidebar-foreground">JupiterBrains</span>
           </div>
           <Button

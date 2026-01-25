@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import JupiterBrainsLogo from '@/components/icons/JupiterBrainsLogo';
+import jupiterBrainsLogo from '@/assets/jupiter-brains-logo.png';
 import { Github, Mail } from 'lucide-react';
 
 const authSchema = z.object({
@@ -102,7 +102,7 @@ export default function Auth() {
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
-            <JupiterBrainsLogo className="w-16 h-16 text-primary" />
+            <img src={jupiterBrainsLogo} alt="JupiterBrains" className="w-16 h-16" />
           </div>
           <CardTitle className="text-2xl font-bold">JupiterBrains</CardTitle>
           <CardDescription className="text-muted-foreground">
