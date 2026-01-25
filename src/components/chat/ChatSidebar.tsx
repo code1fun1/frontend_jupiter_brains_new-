@@ -1,4 +1,4 @@
-import { Plus, MessageSquare, Trash2, PanelLeftClose, Settings, X } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, PanelLeftClose, Settings, X, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatSession } from '@/types/chat';
@@ -13,8 +13,10 @@ interface ChatSidebarProps {
   onDeleteSession: (id: string) => void;
   onClose: () => void;
   onOpenAdmin: () => void;
+  onSignOut?: () => void;
   isOpen: boolean;
   isAdmin?: boolean;
+  userEmail?: string;
 }
 
 export function ChatSidebar({
@@ -25,8 +27,10 @@ export function ChatSidebar({
   onDeleteSession,
   onClose,
   onOpenAdmin,
+  onSignOut,
   isOpen,
-  isAdmin = true, // Default to true for now, will be controlled by auth later
+  isAdmin = false,
+  userEmail,
 }: ChatSidebarProps) {
   const todaySessions = sessions.filter((s) => {
     const today = new Date();
@@ -154,9 +158,23 @@ export function ChatSidebar({
           )}
         </ScrollArea>
 
-        {/* Footer - Only show admin panel button if user is admin */}
-        {isAdmin && (
-          <div className="p-3 border-t border-sidebar-border">
+        {/* Footer */}
+        <div className="p-3 border-t border-sidebar-border space-y-2">
+          {/* User info */}
+          {userEmail && (
+            <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+              <User className="h-3.5 w-3.5" />
+              <span className="truncate">{userEmail}</span>
+              {isAdmin && (
+                <span className="ml-auto text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium">
+                  Admin
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Admin Panel - Only for admins */}
+          {isAdmin && (
             <Button
               variant="ghost"
               onClick={onOpenAdmin}
@@ -165,8 +183,20 @@ export function ChatSidebar({
               <Settings className="h-4 w-4" />
               Admin Panel
             </Button>
-          </div>
-        )}
+          )}
+
+          {/* Sign Out */}
+          {onSignOut && (
+            <Button
+              variant="ghost"
+              onClick={onSignOut}
+              className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          )}
+        </div>
       </div>
     </>
   );
