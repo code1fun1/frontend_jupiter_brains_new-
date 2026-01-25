@@ -71,11 +71,11 @@ export function ChatSidebar({
                 'group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors',
                 currentSessionId === session.id
                   ? 'bg-accent text-accent-foreground'
-                  : 'hover:bg-accent/50'
+                  : 'text-sidebar-foreground hover:bg-accent/50'
               )}
               onClick={() => onSelectSession(session.id)}
             >
-              <MessageSquare className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+              <MessageSquare className="h-4 w-4 flex-shrink-0 text-sidebar-foreground/70" />
               <span className="flex-1 truncate text-sm">{session.title}</span>
               <Button
                 variant="ghost"
