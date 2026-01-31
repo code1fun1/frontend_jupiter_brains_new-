@@ -22,9 +22,10 @@ type AuthFormData = z.infer<typeof authSchema>;
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { user, isLoading, signIn, signUp, signInWithGoogle, signInWithGithub } = useAuth();
+  const { user, isLoading, isAdmin, signIn, signUp, signInWithGoogle, signInWithGithub } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
+  const [persona, setPersona] = useState<'user' | 'admin'>('user');
 
   const form = useForm<AuthFormData>({
     resolver: zodResolver(authSchema),
@@ -36,16 +37,16 @@ export default function Auth() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      navigate('/');
+      navigate(isAdmin ? '/admin' : '/');
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, isAdmin, navigate]);
 
   const handleSubmit = async (data: AuthFormData) => {
     setIsSubmitting(true);
     
     try {
       if (activeTab === 'login') {
-        const { error } = await signIn(data.email, data.password);
+        const { error } = await signIn(data.email, data.password, persona);
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
             toast.error('Invalid email or password');
@@ -54,10 +55,9 @@ export default function Auth() {
           }
         } else {
           toast.success('Logged in successfully!');
-          navigate('/');
         }
       } else {
-        const { error } = await signUp(data.email, data.password);
+        const { data: signUpData, error } = await signUp(data.email, data.password, persona);
         if (error) {
           if (error.message.includes('User already registered')) {
             toast.error('An account with this email already exists. Please log in instead.');
@@ -65,7 +65,7 @@ export default function Auth() {
             toast.error(error.message);
           }
         } else {
-          toast.success('Account created! Please check your email to confirm your account.');
+          toast.success('Account created successfully!');
         }
       }
     } catch (err) {
@@ -110,6 +110,15 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-6">
+            <Tabs value={persona} onValueChange={(v) => setPersona(v as 'user' | 'admin')}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="user">Continue as User</TabsTrigger>
+                <TabsTrigger value="admin">Continue as Admin</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'login' | 'signup')}>
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Login</TabsTrigger>

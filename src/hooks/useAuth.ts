@@ -4,6 +4,23 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type AppRole = 'admin' | 'user';
 
+type AuthMode = 'supabase' | 'static';
+
+const getAuthMode = (): AuthMode => {
+  const raw = (import.meta as any)?.env?.VITE_AUTH_MODE;
+  const mode = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
+  return mode === 'supabase' ? 'supabase' : 'static';
+};
+
+const STATIC_AUTH_STORAGE_KEY = 'jb_static_auth';
+
+const getStaticAdminMode = (): 'auto' | 'admin' | 'user' => {
+  const raw = (import.meta as any)?.env?.VITE_STATIC_ROLE;
+  const role = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
+  if (role === 'admin' || role === 'user') return role;
+  return 'auto';
+};
+
 interface AuthState {
   user: User | null;
   session: Session | null;
@@ -21,6 +38,43 @@ export function useAuth() {
     isAdmin: false,
   });
 
+  const authMode = getAuthMode();
+
+  const setStaticUser = useCallback((email: string, roleOverride?: AppRole) => {
+    const forcedRole = getStaticAdminMode();
+    const computedRole: AppRole = roleOverride
+      ? roleOverride
+      : forcedRole === 'admin'
+        ? 'admin'
+        : forcedRole === 'user'
+          ? 'user'
+          : email.toLowerCase().includes('admin')
+            ? 'admin'
+            : 'user';
+
+    const fakeUser = {
+      id: 'static-user',
+      email,
+    } as unknown as User;
+
+    setAuthState({
+      user: fakeUser,
+      session: null,
+      role: computedRole,
+      isAdmin: computedRole === 'admin',
+      isLoading: false,
+    });
+
+    try {
+      localStorage.setItem(
+        STATIC_AUTH_STORAGE_KEY,
+        JSON.stringify({ email, role: computedRole })
+      );
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const fetchUserRole = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from('user_roles')
@@ -37,6 +91,41 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
+    if (authMode === 'static') {
+      try {
+        const raw = localStorage.getItem(STATIC_AUTH_STORAGE_KEY);
+        if (!raw) {
+          setAuthState(prev => ({ ...prev, isLoading: false }));
+          return;
+        }
+
+        const parsed = JSON.parse(raw) as { email?: string; role?: AppRole };
+        if (!parsed.email) {
+          setAuthState(prev => ({ ...prev, isLoading: false }));
+          return;
+        }
+
+        const fakeUser = {
+          id: 'static-user',
+          email: parsed.email,
+        } as unknown as User;
+
+        const role: AppRole = parsed.role === 'admin' ? 'admin' : 'user';
+
+        setAuthState({
+          user: fakeUser,
+          session: null,
+          role,
+          isAdmin: role === 'admin',
+          isLoading: false,
+        });
+      } catch {
+        setAuthState(prev => ({ ...prev, isLoading: false }));
+      }
+
+      return;
+    }
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -95,9 +184,14 @@ export function useAuth() {
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchUserRole]);
+  }, [authMode, fetchUserRole]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, roleOverride?: AppRole) => {
+    if (authMode === 'static') {
+      setStaticUser(email, roleOverride);
+      return { error: null };
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -105,25 +199,51 @@ export function useAuth() {
     return { error };
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, roleOverride?: AppRole) => {
+    if (authMode === 'static') {
+      setStaticUser(email, roleOverride);
+      return { data: null, error: null };
+    }
+
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
       },
     });
-    return { error };
+    return { data, error };
   };
 
   const signOut = async () => {
+    if (authMode === 'static') {
+      try {
+        localStorage.removeItem(STATIC_AUTH_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+
+      setAuthState({
+        user: null,
+        session: null,
+        role: null,
+        isAdmin: false,
+        isLoading: false,
+      });
+      return { error: null };
+    }
+
     const { error } = await supabase.auth.signOut();
     return { error };
   };
 
   const signInWithGoogle = async () => {
+    if (authMode === 'static') {
+      return { error: null };
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -134,6 +254,10 @@ export function useAuth() {
   };
 
   const signInWithGithub = async () => {
+    if (authMode === 'static') {
+      return { error: null };
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {

@@ -3,15 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatArea } from '@/components/chat/ChatArea';
-import { AdminDashboard } from '@/components/admin';
-import { useChatStore } from '@/hooks/useChatStore';
+import { useChatStoreContext } from '@/contexts/ChatStoreContext';
 import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, isAdmin, signOut } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   const {
     sessions,
@@ -26,10 +24,7 @@ const Index = () => {
     deleteSession,
     sendMessage,
     setSelectedModel,
-    updateModel,
-    addModel,
-    removeModel,
-  } = useChatStore();
+  } = useChatStoreContext();
 
   // Redirect to auth if not logged in
   useEffect(() => {
@@ -68,7 +63,7 @@ const Index = () => {
         onSelectSession={selectSession}
         onDeleteSession={deleteSession}
         onClose={() => setIsSidebarOpen(false)}
-        onOpenAdmin={() => setIsAdminOpen(true)}
+        onOpenAdmin={() => navigate('/admin')}
         onSignOut={handleSignOut}
         isOpen={isSidebarOpen}
         isAdmin={isAdmin}
@@ -98,16 +93,6 @@ const Index = () => {
           />
         </div>
       </div>
-
-      {/* Admin Dashboard Modal */}
-      <AdminDashboard
-        isOpen={isAdminOpen}
-        onClose={() => setIsAdminOpen(false)}
-        models={models}
-        onUpdateModel={updateModel}
-        onAddModel={addModel}
-        onRemoveModel={removeModel}
-      />
     </div>
   );
 };
