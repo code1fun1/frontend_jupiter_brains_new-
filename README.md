@@ -26,7 +26,7 @@ Run commands from the `frontend/` directory.
 
 All backend URLs are built from a single base URL:
 
-- `VITE_BACKEND_BASE_URL` (default: `http://localhost:8081`)
+- `VITE_BACKEND_BASE_URL`
 
 You can optionally override individual endpoints if needed:
 
