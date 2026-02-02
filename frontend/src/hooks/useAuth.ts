@@ -9,6 +9,28 @@ const API_BASE_URL =
     ? (import.meta as any).env.VITE_API_BASE_URL.replace(/"/g, '').trim()
     : 'http://127.0.0.1:8000';
 
+const SIGNUP_URL =
+  (import.meta as any)?.env?.VITE_AUTH_SIGNUP_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNUP_URL === 'string'
+    ? (import.meta as any).env.VITE_AUTH_SIGNUP_URL.replace(/"/g, '').trim()
+    : 'http://localhost:8081/api/v1/auths/add';
+
+const SIGNUP_BEARER_TOKEN =
+  (import.meta as any)?.env?.VITE_AUTH_SIGNUP_BEARER_TOKEN &&
+  typeof (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN === 'string'
+    ? (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN.replace(/"/g, '').trim()
+    : '';
+
+const SIGNUP_API_KEY =
+  (import.meta as any)?.env?.VITE_AUTH_SIGNUP_API_KEY && typeof (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY === 'string'
+    ? (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY.replace(/"/g, '').trim()
+    : '';
+
+const SIGNUP_API_KEY_HEADER =
+  (import.meta as any)?.env?.VITE_AUTH_SIGNUP_API_KEY_HEADER &&
+  typeof (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY_HEADER === 'string'
+    ? (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY_HEADER.replace(/"/g, '').trim()
+    : 'x-api-key';
+
 type StaticUser = {
   id: string;
   email: string;
@@ -148,22 +170,62 @@ export function useAuth() {
     }
   };
 
-  const signUp = async (email: string, password: string, roleOverride?: AppRole) => {
+  const signUp = async (email: string, password: string, roleOverride?: AppRole, nameOverride?: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
+      const cleanProvidedName =
+        typeof nameOverride === 'string' ? nameOverride.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim() : '';
+
+      const derivedName = String(email || '')
+        .split('@')[0]
+        ?.replace(/[^a-zA-Z0-9_\-\s]/g, '')
+        .trim();
+      const name = cleanProvidedName || derivedName || 'user';
+
+      const role = (roleOverride || 'user') as AppRole;
+
+      const authValue = SIGNUP_BEARER_TOKEN
+        ? SIGNUP_BEARER_TOKEN.toLowerCase().startsWith('bearer ')
+          ? SIGNUP_BEARER_TOKEN
+          : `Bearer ${SIGNUP_BEARER_TOKEN}`
+        : '';
+
+      const bearerHeader = authValue ? { Authorization: authValue } : {};
+      const apiKeyHeader = SIGNUP_API_KEY ? { [SIGNUP_API_KEY_HEADER]: SIGNUP_API_KEY } : {};
+      const authHeader = { ...bearerHeader, ...apiKeyHeader };
+
+      const jsonRes = await fetch(SIGNUP_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeader },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, name, role }),
       });
 
-      const data = await res.json().catch(() => null);
+      const jsonData = await jsonRes.json().catch(() => null);
+
+      const missingBody422 =
+        jsonRes.status === 422 &&
+        Array.isArray(jsonData?.detail) &&
+        jsonData.detail.some((d: any) => Array.isArray(d?.loc) && d.loc.join('.') === 'body' && d.type === 'missing');
+
+      const res = missingBody422
+        ? await fetch(SIGNUP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...authHeader },
+            credentials: 'include',
+            body: new URLSearchParams({ email, password, name, role }).toString(),
+          })
+        : jsonRes;
+
+      const data = missingBody422 ? await res.json().catch(() => null) : jsonData;
+
       if (!res.ok) {
-        return { data: null, error: { message: data?.detail || 'Signup failed' } };
+        const detail = typeof data?.detail === 'string' ? data.detail : null;
+        const message = detail || `Signup failed (HTTP ${res.status})`;
+        return { data: null, error: { message } };
       }
 
-      const role = (roleOverride || data?.role || 'user') as AppRole;
-      setSessionUser({ id: data.id, email: data.email, role });
+      const finalRole = (data?.role || roleOverride || 'user') as AppRole;
+      setSessionUser({ id: data.id, email: data.email, role: finalRole });
       return { data, error: null };
     } catch (e: any) {
       return { data: null, error: { message: e?.message || 'Signup failed' } };

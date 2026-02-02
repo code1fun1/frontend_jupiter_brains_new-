@@ -14,6 +14,7 @@ import jupiterBrainsLogo from '@/assets/jupiter-brains-logo.png';
 import { Github, Mail } from 'lucide-react';
 
 const authSchema = z.object({
+  name: z.string().trim().optional(),
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
@@ -30,6 +31,7 @@ export default function Auth() {
   const form = useForm<AuthFormData>({
     resolver: zodResolver(authSchema),
     defaultValues: {
+      name: '',
       email: '',
       password: '',
     },
@@ -57,7 +59,11 @@ export default function Auth() {
           toast.success('Logged in successfully!');
         }
       } else {
-        const { data: signUpData, error } = await signUp(data.email, data.password, persona);
+        if (!data.name || !data.name.trim()) {
+          form.setError('name', { type: 'manual', message: 'Name is required' });
+          return;
+        }
+        const { data: signUpData, error } = await signUp(data.email, data.password, persona, data.name);
         if (error) {
           if (error.message.includes('User already registered')) {
             toast.error('An account with this email already exists. Please log in instead.');
@@ -178,6 +184,24 @@ export default function Auth() {
             <TabsContent value="signup" className="space-y-4">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="text"
+                            placeholder="Your name"
+                            {...field}
+                            className="bg-background"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="email"
