@@ -4,6 +4,11 @@ export type AppRole = 'admin' | 'user';
 
 const STATIC_AUTH_STORAGE_KEY = 'jb_static_auth';
 
+const BACKEND_BASE_URL =
+  (import.meta as any)?.env?.VITE_BACKEND_BASE_URL && typeof (import.meta as any).env.VITE_BACKEND_BASE_URL === 'string'
+    ? (import.meta as any).env.VITE_BACKEND_BASE_URL.replace(/"/g, '').trim().replace(/\/$/, '')
+    : 'http://localhost:8081';
+
 const API_BASE_URL =
   (import.meta as any)?.env?.VITE_API_BASE_URL && typeof (import.meta as any).env.VITE_API_BASE_URL === 'string'
     ? (import.meta as any).env.VITE_API_BASE_URL.replace(/"/g, '').trim()
@@ -12,17 +17,17 @@ const API_BASE_URL =
 const SIGNUP_URL =
   (import.meta as any)?.env?.VITE_AUTH_SIGNUP_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNUP_URL === 'string'
     ? (import.meta as any).env.VITE_AUTH_SIGNUP_URL.replace(/"/g, '').trim()
-    : 'http://localhost:8081/api/v1/auths/add';
+    : `${BACKEND_BASE_URL}/api/v1/auths/add`;
 
 const SIGNIN_URL =
   (import.meta as any)?.env?.VITE_AUTH_SIGNIN_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNIN_URL === 'string'
     ? (import.meta as any).env.VITE_AUTH_SIGNIN_URL.replace(/"/g, '').trim()
-    : 'http://localhost:8081/api/v1/auths/signin';
+    : `${BACKEND_BASE_URL}/api/v1/auths/signin`;
 
 const SIGNOUT_URL =
   (import.meta as any)?.env?.VITE_AUTH_SIGNOUT_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNOUT_URL === 'string'
     ? (import.meta as any).env.VITE_AUTH_SIGNOUT_URL.replace(/"/g, '').trim()
-    : 'http://localhost:8081/api/v1/auths/signout';
+    : `${BACKEND_BASE_URL}/api/v1/auths/signout`;
 
 const SIGNUP_BEARER_TOKEN =
   (import.meta as any)?.env?.VITE_AUTH_SIGNUP_BEARER_TOKEN &&

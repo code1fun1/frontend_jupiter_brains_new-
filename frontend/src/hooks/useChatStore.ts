@@ -3,10 +3,15 @@ import { Message, ChatSession, AIModel, DEFAULT_MODELS } from '@/types/chat';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
+const BACKEND_BASE_URL =
+  (import.meta as any)?.env?.VITE_BACKEND_BASE_URL && typeof (import.meta as any).env.VITE_BACKEND_BASE_URL === 'string'
+    ? (import.meta as any).env.VITE_BACKEND_BASE_URL.replace(/"/g, '').trim().replace(/\/$/, '')
+    : 'http://localhost:8081';
+
 const MODELS_URL =
   (import.meta as any)?.env?.VITE_MODELS_API_URL && typeof (import.meta as any).env.VITE_MODELS_API_URL === 'string'
     ? (import.meta as any).env.VITE_MODELS_API_URL.replace(/"/g, '').trim()
-    : 'http://localhost:8081/api/models?';
+    : `${BACKEND_BASE_URL}/api/models?`;
 
 const MODELS_BEARER_TOKEN =
   (import.meta as any)?.env?.VITE_MODELS_BEARER_TOKEN && typeof (import.meta as any).env.VITE_MODELS_BEARER_TOKEN === 'string'
@@ -39,7 +44,7 @@ const CHAT_COMPLETIONS_URL =
   (import.meta as any)?.env?.VITE_CHAT_COMPLETIONS_URL &&
   typeof (import.meta as any).env.VITE_CHAT_COMPLETIONS_URL === 'string'
     ? (import.meta as any).env.VITE_CHAT_COMPLETIONS_URL.replace(/"/g, '').trim()
-    : 'http://localhost:8081/api/chat/completions';
+    : `${BACKEND_BASE_URL}/api/chat/completions`;
 
 const generateTitle = (content: string): string => {
   const words = content.split(' ').slice(0, 5).join(' ');
