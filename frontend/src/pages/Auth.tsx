@@ -59,6 +59,10 @@ export default function Auth() {
           toast.success('Logged in successfully!');
         }
       } else {
+        if (persona === 'admin') {
+          toast.error('Admin signup is disabled. Please use an existing admin account to log in.');
+          return;
+        }
         if (!data.name || !data.name.trim()) {
           form.setError('name', { type: 'manual', message: 'Name is required' });
           return;
