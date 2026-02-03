@@ -25,6 +25,7 @@ export default function Auth() {
   const navigate = useNavigate();
   const { user, isLoading, isAdmin, signIn, signUp, signInWithGoogle, signInWithGithub } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
   const [persona, setPersona] = useState<'user' | 'admin'>('user');
 
@@ -38,10 +39,19 @@ export default function Auth() {
   });
 
   useEffect(() => {
-    if (!isLoading && user) {
+    if (isLoading || !user) return;
+    if (!isRedirecting) setIsRedirecting(true);
+  }, [user, isLoading, isRedirecting]);
+
+  useEffect(() => {
+    if (isLoading || !user || !isRedirecting) return;
+
+    const t = window.setTimeout(() => {
       navigate(isAdmin ? '/admin' : '/');
-    }
-  }, [user, isLoading, isAdmin, navigate]);
+    }, 600);
+
+    return () => window.clearTimeout(t);
+  }, [user, isLoading, isAdmin, navigate, isRedirecting]);
 
   const handleSubmit = async (data: AuthFormData) => {
     setIsSubmitting(true);
@@ -57,17 +67,14 @@ export default function Auth() {
           }
         } else {
           toast.success('Logged in successfully!');
+          setIsRedirecting(true);
         }
       } else {
-        if (persona === 'admin') {
-          toast.error('Admin signup is disabled. Please use an existing admin account to log in.');
-          return;
-        }
         if (!data.name || !data.name.trim()) {
           form.setError('name', { type: 'manual', message: 'Name is required' });
           return;
         }
-        const { data: signUpData, error } = await signUp(data.email, data.password, persona, data.name);
+        const { data: signUpData, error } = await signUp(data.email, data.password, undefined, data.name);
         if (error) {
           if (error.message.includes('User already registered')) {
             toast.error('An account with this email already exists. Please log in instead.');
@@ -76,6 +83,7 @@ export default function Auth() {
           }
         } else {
           toast.success('Account created successfully!');
+          setIsRedirecting(true);
         }
       }
     } catch (err) {
@@ -103,6 +111,27 @@ export default function Auth() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (isRedirecting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 dark">
+        <Card className="w-full max-w-md border-border bg-card">
+          <CardHeader className="text-center space-y-4">
+            <div className="flex justify-center">
+              <img src={jupiterBrainsLogo} alt="JupiterBrains" className="w-16 h-16" />
+            </div>
+            <CardTitle className="text-2xl font-bold">JupiterBrains</CardTitle>
+            <CardDescription className="text-muted-foreground">Redirecting...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-center py-4">
+              <div className="h-10 w-10 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

@@ -4,10 +4,19 @@ export type AppRole = 'admin' | 'user';
 
 const STATIC_AUTH_STORAGE_KEY = 'jb_static_auth';
 
+const STATIC_AUTH_SESSION_KEY = 'jb_static_auth_session';
+
 const BACKEND_BASE_URL =
   (import.meta as any)?.env?.VITE_BACKEND_BASE_URL && typeof (import.meta as any).env.VITE_BACKEND_BASE_URL === 'string'
     ? (import.meta as any).env.VITE_BACKEND_BASE_URL.replace(/"/g, '').trim().replace(/\/$/, '')
     : 'http://localhost:8081';
+
+const USE_VITE_PROXY =
+  typeof (import.meta as any).env?.VITE_USE_VITE_PROXY === 'string'
+    ? (import.meta as any).env.VITE_USE_VITE_PROXY.replace(/"/g, '').trim().toLowerCase() !== 'false'
+    : true;
+
+const API_BASE_FOR_EXTERNAL = (import.meta as any).env?.DEV && USE_VITE_PROXY ? '' : BACKEND_BASE_URL;
 
 const API_BASE_URL =
   (import.meta as any)?.env?.VITE_API_BASE_URL && typeof (import.meta as any).env.VITE_API_BASE_URL === 'string'
@@ -17,17 +26,17 @@ const API_BASE_URL =
 const SIGNUP_URL =
   (import.meta as any)?.env?.VITE_AUTH_SIGNUP_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNUP_URL === 'string'
     ? (import.meta as any).env.VITE_AUTH_SIGNUP_URL.replace(/"/g, '').trim()
-    : `${BACKEND_BASE_URL}/api/v1/auths/add`;
+    : `${API_BASE_FOR_EXTERNAL}/api/v1/auths/signup`;
 
 const SIGNIN_URL =
   (import.meta as any)?.env?.VITE_AUTH_SIGNIN_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNIN_URL === 'string'
     ? (import.meta as any).env.VITE_AUTH_SIGNIN_URL.replace(/"/g, '').trim()
-    : `${BACKEND_BASE_URL}/api/v1/auths/signin`;
+    : `${API_BASE_FOR_EXTERNAL}/api/v1/auths/signin`;
 
 const SIGNOUT_URL =
   (import.meta as any)?.env?.VITE_AUTH_SIGNOUT_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNOUT_URL === 'string'
     ? (import.meta as any).env.VITE_AUTH_SIGNOUT_URL.replace(/"/g, '').trim()
-    : `${BACKEND_BASE_URL}/api/v1/auths/signout`;
+    : `${API_BASE_FOR_EXTERNAL}/api/v1/auths/signout`;
 
 const SIGNUP_BEARER_TOKEN =
   (import.meta as any)?.env?.VITE_AUTH_SIGNUP_BEARER_TOKEN &&
@@ -49,6 +58,16 @@ const SIGNUP_API_KEY_HEADER =
 type StaticUser = {
   id: string;
   email: string;
+  name?: string;
+  role?: AppRole;
+  profile_image_url?: string;
+};
+
+type StaticSession = {
+  token: string;
+  token_type?: string;
+  expires_at?: number;
+  permissions?: any;
 };
 
 const getStaticAdminMode = (): 'auto' | 'admin' | 'user' => {
@@ -110,8 +129,25 @@ export function useAuth() {
     }
   }, []);
 
-  const setSessionUser = useCallback((payload: { id: number; email: string; role: AppRole }) => {
-    const user = { id: String(payload.id), email: payload.email };
+  const setSessionUser = useCallback(
+    (payload: {
+      id: string | number;
+      email: string;
+      role: AppRole;
+      name?: string;
+      profile_image_url?: string;
+      token?: string;
+      token_type?: string;
+      expires_at?: number;
+      permissions?: any;
+    }) => {
+      const user: StaticUser = {
+        id: String(payload.id),
+        email: payload.email,
+        name: payload.name,
+        role: payload.role,
+        profile_image_url: payload.profile_image_url,
+      };
     setAuthState({
       user,
       session: null,
@@ -128,6 +164,21 @@ export function useAuth() {
     } catch {
       // ignore
     }
+
+    if (payload.token) {
+      const session: StaticSession = {
+        token: payload.token,
+        token_type: payload.token_type,
+        expires_at: payload.expires_at,
+        permissions: payload.permissions,
+      };
+
+      try {
+        localStorage.setItem(STATIC_AUTH_SESSION_KEY, JSON.stringify(session));
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -138,15 +189,16 @@ export function useAuth() {
         return;
       }
 
-      const parsed = JSON.parse(raw) as { email?: string; role?: AppRole };
+      const parsed = JSON.parse(raw) as { email?: string; role?: AppRole; id?: string };
       if (!parsed.email) {
         setAuthState(prev => ({ ...prev, isLoading: false }));
         return;
       }
 
       const fakeUser: StaticUser = {
-        id: 'static-user',
+        id: parsed.id || 'static-user',
         email: parsed.email,
+        role: parsed.role === 'admin' ? 'admin' : 'user',
       };
 
       const role: AppRole = parsed.role === 'admin' ? 'admin' : 'user';
@@ -229,8 +281,6 @@ export function useAuth() {
         .trim();
       const name = cleanProvidedName || derivedName || 'user';
 
-      const role = (roleOverride || 'user') as AppRole;
-
       const authValue = SIGNUP_BEARER_TOKEN
         ? SIGNUP_BEARER_TOKEN.toLowerCase().startsWith('bearer ')
           ? SIGNUP_BEARER_TOKEN
@@ -245,7 +295,7 @@ export function useAuth() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeader },
         credentials: 'include',
-        body: JSON.stringify({ email, password, name, role }),
+        body: JSON.stringify({ email, password, name }),
       });
 
       const jsonData = await jsonRes.json().catch(() => null);
@@ -260,7 +310,7 @@ export function useAuth() {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...authHeader },
             credentials: 'include',
-            body: new URLSearchParams({ email, password, name, role }).toString(),
+            body: new URLSearchParams({ email, password, name }).toString(),
           })
         : jsonRes;
 
@@ -273,7 +323,17 @@ export function useAuth() {
       }
 
       const finalRole = (data?.role || roleOverride || 'user') as AppRole;
-      setSessionUser({ id: data.id, email: data.email, role: finalRole });
+      setSessionUser({
+        id: data?.id,
+        email: data?.email || email,
+        role: finalRole,
+        name: data?.name,
+        profile_image_url: data?.profile_image_url,
+        token: data?.token,
+        token_type: data?.token_type,
+        expires_at: data?.expires_at,
+        permissions: data?.permissions,
+      });
       return { data, error: null };
     } catch (e: any) {
       return { data: null, error: { message: e?.message || 'Signup failed' } };
@@ -294,33 +354,18 @@ export function useAuth() {
 
       const headers = { Accept: 'application/json', ...authHeader };
 
-      const res = await fetch(SIGNOUT_URL, {
-        method: 'POST',
+      await fetch(SIGNOUT_URL, {
+        method: 'GET',
         headers,
         credentials: 'include',
       }).catch(() => null);
-
-      if ((res as any)?.status === 405) {
-        const res2 = await fetch(SIGNOUT_URL, {
-          method: 'GET',
-          headers,
-          credentials: 'include',
-        }).catch(() => null);
-
-        if ((res2 as any)?.status === 405) {
-          await fetch(SIGNOUT_URL, {
-            method: 'DELETE',
-            headers,
-            credentials: 'include',
-          }).catch(() => null);
-        }
-      }
     } catch {
       // ignore
     }
 
     try {
       localStorage.removeItem(STATIC_AUTH_STORAGE_KEY);
+      localStorage.removeItem(STATIC_AUTH_SESSION_KEY);
     } catch {
       // ignore
     }

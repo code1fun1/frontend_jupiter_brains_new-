@@ -26,6 +26,8 @@ const Index = () => {
     setSelectedModel,
   } = useChatStoreContext();
 
+  const modelsForSelector = enabledModels.length > 0 ? enabledModels : models;
+
   // Redirect to auth if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
@@ -74,7 +76,7 @@ const Index = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
         <ChatHeader
-          models={enabledModels}
+          models={modelsForSelector}
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}
           onOpenSidebar={() => setIsSidebarOpen(true)}

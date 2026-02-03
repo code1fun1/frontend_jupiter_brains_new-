@@ -8,10 +8,19 @@ const BACKEND_BASE_URL =
     ? (import.meta as any).env.VITE_BACKEND_BASE_URL.replace(/"/g, '').trim().replace(/\/$/, '')
     : 'http://localhost:8081';
 
+const USE_VITE_PROXY =
+  typeof (import.meta as any).env?.VITE_USE_VITE_PROXY === 'string'
+    ? (import.meta as any).env.VITE_USE_VITE_PROXY.replace(/"/g, '').trim().toLowerCase() !== 'false'
+    : true;
+
+const API_BASE_FOR_EXTERNAL = (import.meta as any).env?.DEV && USE_VITE_PROXY ? '' : BACKEND_BASE_URL;
+
 const MODELS_URL =
   (import.meta as any)?.env?.VITE_MODELS_API_URL && typeof (import.meta as any).env.VITE_MODELS_API_URL === 'string'
     ? (import.meta as any).env.VITE_MODELS_API_URL.replace(/"/g, '').trim()
-    : `${BACKEND_BASE_URL}/api/models?`;
+    : `${API_BASE_FOR_EXTERNAL}/api/models?`;
+
+const STATIC_AUTH_SESSION_KEY = 'jb_static_auth_session';
 
 const MODELS_BEARER_TOKEN =
   (import.meta as any)?.env?.VITE_MODELS_BEARER_TOKEN && typeof (import.meta as any).env.VITE_MODELS_BEARER_TOKEN === 'string'
@@ -21,6 +30,20 @@ const MODELS_BEARER_TOKEN =
       typeof (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN === 'string'
       ? (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN.replace(/"/g, '').trim()
       : '';
+
+const getStoredBearerToken = (): string => {
+  try {
+    const raw = localStorage.getItem(STATIC_AUTH_SESSION_KEY);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw) as any;
+    const token = typeof parsed?.token === 'string' ? parsed.token : '';
+    const tokenType = typeof parsed?.token_type === 'string' ? parsed.token_type : 'Bearer';
+    if (!token) return '';
+    return `${tokenType} ${token}`.trim();
+  } catch {
+    return '';
+  }
+};
 
 const MODELS_API_KEY =
   (import.meta as any)?.env?.VITE_MODELS_API_KEY && typeof (import.meta as any).env.VITE_MODELS_API_KEY === 'string'
@@ -44,7 +67,7 @@ const CHAT_COMPLETIONS_URL =
   (import.meta as any)?.env?.VITE_CHAT_COMPLETIONS_URL &&
   typeof (import.meta as any).env.VITE_CHAT_COMPLETIONS_URL === 'string'
     ? (import.meta as any).env.VITE_CHAT_COMPLETIONS_URL.replace(/"/g, '').trim()
-    : `${BACKEND_BASE_URL}/api/chat/completions`;
+    : `${API_BASE_FOR_EXTERNAL}/api/chat/completions`;
 
 const generateTitle = (content: string): string => {
   const words = content.split(' ').slice(0, 5).join(' ');
@@ -63,11 +86,14 @@ export function useChatStore() {
 
     const loadModels = async () => {
       try {
-        const authValue = MODELS_BEARER_TOKEN
-          ? MODELS_BEARER_TOKEN.toLowerCase().startsWith('bearer ')
-            ? MODELS_BEARER_TOKEN
-            : `Bearer ${MODELS_BEARER_TOKEN}`
-          : '';
+        const envToken = MODELS_BEARER_TOKEN;
+        const storedToken = getStoredBearerToken();
+
+        const authValue = envToken
+          ? envToken.toLowerCase().startsWith('bearer ')
+            ? envToken
+            : `Bearer ${envToken}`
+          : storedToken;
 
         const bearerHeader = authValue ? { Authorization: authValue } : {};
         const apiKeyHeader = MODELS_API_KEY ? { [MODELS_API_KEY_HEADER]: MODELS_API_KEY } : {};
@@ -208,11 +234,14 @@ export function useChatStore() {
     setIsLoading(true);
 
     try {
-      const authValue = MODELS_BEARER_TOKEN
-        ? MODELS_BEARER_TOKEN.toLowerCase().startsWith('bearer ')
-          ? MODELS_BEARER_TOKEN
-          : `Bearer ${MODELS_BEARER_TOKEN}`
-        : '';
+      const envToken = MODELS_BEARER_TOKEN;
+      const storedToken = getStoredBearerToken();
+
+      const authValue = envToken
+        ? envToken.toLowerCase().startsWith('bearer ')
+          ? envToken
+          : `Bearer ${envToken}`
+        : storedToken;
 
       const bearerHeader = authValue ? { Authorization: authValue } : {};
       const apiKeyHeader = MODELS_API_KEY ? { [MODELS_API_KEY_HEADER]: MODELS_API_KEY } : {};
