@@ -3,22 +3,11 @@ import { Message, ChatSession, AIModel, DEFAULT_MODELS } from '@/types/chat';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
-const BACKEND_BASE_URL =
-  (import.meta as any)?.env?.VITE_BACKEND_BASE_URL && typeof (import.meta as any).env.VITE_BACKEND_BASE_URL === 'string'
-    ? (import.meta as any).env.VITE_BACKEND_BASE_URL.replace(/"/g, '').trim().replace(/\/$/, '')
-    : 'http://localhost:8081';
-
-const USE_VITE_PROXY =
-  typeof (import.meta as any).env?.VITE_USE_VITE_PROXY === 'string'
-    ? (import.meta as any).env.VITE_USE_VITE_PROXY.replace(/"/g, '').trim().toLowerCase() !== 'false'
-    : true;
-
-const API_BASE_FOR_EXTERNAL = (import.meta as any).env?.DEV && USE_VITE_PROXY ? '' : BACKEND_BASE_URL;
-
-const MODELS_URL =
-  (import.meta as any)?.env?.VITE_MODELS_API_URL && typeof (import.meta as any).env.VITE_MODELS_API_URL === 'string'
-    ? (import.meta as any).env.VITE_MODELS_API_URL.replace(/"/g, '').trim()
-    : `${API_BASE_FOR_EXTERNAL}/api/models?`;
+const getBackendBaseUrl = () => {
+  const raw = (import.meta as any)?.env?.VITE_BACKEND_BASE_URL;
+  const base = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
+  return (base || 'http://localhost:8081').replace(/\/$/, '');
+};
 
 const STATIC_AUTH_SESSION_KEY = 'jb_static_auth_session';
 
@@ -63,11 +52,9 @@ const MODELS_API_KEY_HEADER =
       ? (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY_HEADER.replace(/"/g, '').trim()
       : 'x-api-key';
 
-const CHAT_COMPLETIONS_URL =
-  (import.meta as any)?.env?.VITE_CHAT_COMPLETIONS_URL &&
-  typeof (import.meta as any).env.VITE_CHAT_COMPLETIONS_URL === 'string'
-    ? (import.meta as any).env.VITE_CHAT_COMPLETIONS_URL.replace(/"/g, '').trim()
-    : `${API_BASE_FOR_EXTERNAL}/api/chat/completions`;
+const getChatCompletionsUrl = () => `${getBackendBaseUrl()}/api/chat/completions`;
+
+const getModelsUrl = () => `${getBackendBaseUrl()}/api/models?`;
 
 const generateTitle = (content: string): string => {
   const words = content.split(' ').slice(0, 5).join(' ');
@@ -90,6 +77,8 @@ export function useChatStore() {
 
     const promise = (async () => {
       try {
+        const modelsUrl = getModelsUrl();
+
         const envToken = MODELS_BEARER_TOKEN;
         const storedToken = getStoredBearerToken();
 
@@ -102,7 +91,7 @@ export function useChatStore() {
         const bearerHeader = authValue ? { Authorization: authValue } : {};
         const apiKeyHeader = MODELS_API_KEY ? { [MODELS_API_KEY_HEADER]: MODELS_API_KEY } : {};
 
-        const res = await fetch(MODELS_URL, {
+        const res = await fetch(modelsUrl, {
           method: 'GET',
           headers: { Accept: 'application/json', ...bearerHeader, ...apiKeyHeader },
         });
@@ -242,6 +231,8 @@ export function useChatStore() {
     setIsLoading(true);
 
     try {
+      const chatUrl = getChatCompletionsUrl();
+
       const envToken = MODELS_BEARER_TOKEN;
       const storedToken = getStoredBearerToken();
 
@@ -259,7 +250,7 @@ export function useChatStore() {
         content: m.content,
       }));
 
-      const res = await fetch(CHAT_COMPLETIONS_URL, {
+      const res = await fetch(chatUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

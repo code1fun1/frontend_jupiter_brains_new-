@@ -6,37 +6,11 @@ const STATIC_AUTH_STORAGE_KEY = 'jb_static_auth';
 
 const STATIC_AUTH_SESSION_KEY = 'jb_static_auth_session';
 
-const BACKEND_BASE_URL =
-  (import.meta as any)?.env?.VITE_BACKEND_BASE_URL && typeof (import.meta as any).env.VITE_BACKEND_BASE_URL === 'string'
-    ? (import.meta as any).env.VITE_BACKEND_BASE_URL.replace(/"/g, '').trim().replace(/\/$/, '')
-    : 'http://localhost:8081';
-
-const USE_VITE_PROXY =
-  typeof (import.meta as any).env?.VITE_USE_VITE_PROXY === 'string'
-    ? (import.meta as any).env.VITE_USE_VITE_PROXY.replace(/"/g, '').trim().toLowerCase() !== 'false'
-    : true;
-
-const API_BASE_FOR_EXTERNAL = (import.meta as any).env?.DEV && USE_VITE_PROXY ? '' : BACKEND_BASE_URL;
-
-const API_BASE_URL =
-  (import.meta as any)?.env?.VITE_API_BASE_URL && typeof (import.meta as any).env.VITE_API_BASE_URL === 'string'
-    ? (import.meta as any).env.VITE_API_BASE_URL.replace(/"/g, '').trim()
-    : 'http://127.0.0.1:8000';
-
-const SIGNUP_URL =
-  (import.meta as any)?.env?.VITE_AUTH_SIGNUP_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNUP_URL === 'string'
-    ? (import.meta as any).env.VITE_AUTH_SIGNUP_URL.replace(/"/g, '').trim()
-    : `${API_BASE_FOR_EXTERNAL}/api/v1/auths/signup`;
-
-const SIGNIN_URL =
-  (import.meta as any)?.env?.VITE_AUTH_SIGNIN_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNIN_URL === 'string'
-    ? (import.meta as any).env.VITE_AUTH_SIGNIN_URL.replace(/"/g, '').trim()
-    : `${API_BASE_FOR_EXTERNAL}/api/v1/auths/signin`;
-
-const SIGNOUT_URL =
-  (import.meta as any)?.env?.VITE_AUTH_SIGNOUT_URL && typeof (import.meta as any).env.VITE_AUTH_SIGNOUT_URL === 'string'
-    ? (import.meta as any).env.VITE_AUTH_SIGNOUT_URL.replace(/"/g, '').trim()
-    : `${API_BASE_FOR_EXTERNAL}/api/v1/auths/signout`;
+const getBackendBaseUrl = () => {
+  const raw = (import.meta as any)?.env?.VITE_BACKEND_BASE_URL;
+  const base = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
+  return (base || 'http://localhost:8081').replace(/\/$/, '');
+};
 
 const SIGNUP_BEARER_TOKEN =
   (import.meta as any)?.env?.VITE_AUTH_SIGNUP_BEARER_TOKEN &&
@@ -218,6 +192,8 @@ export function useAuth() {
 
   const signIn = async (email: string, password: string, roleOverride?: AppRole) => {
     try {
+      const signInUrl = `${getBackendBaseUrl()}/api/v1/auths/signin`;
+
       const authValue = SIGNUP_BEARER_TOKEN
         ? SIGNUP_BEARER_TOKEN.toLowerCase().startsWith('bearer ')
           ? SIGNUP_BEARER_TOKEN
@@ -228,7 +204,7 @@ export function useAuth() {
       const apiKeyHeader = SIGNUP_API_KEY ? { [SIGNUP_API_KEY_HEADER]: SIGNUP_API_KEY } : {};
       const authHeader = { ...bearerHeader, ...apiKeyHeader };
 
-      const jsonRes = await fetch(SIGNIN_URL, {
+      const jsonRes = await fetch(signInUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeader },
         credentials: 'include',
@@ -243,7 +219,7 @@ export function useAuth() {
         jsonData.detail.some((d: any) => Array.isArray(d?.loc) && d.loc.join('.') === 'body' && d.type === 'missing');
 
       const res = missingBody422
-        ? await fetch(SIGNIN_URL, {
+        ? await fetch(signInUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...authHeader },
             credentials: 'include',
@@ -286,6 +262,8 @@ export function useAuth() {
 
   const signUp = async (email: string, password: string, roleOverride?: AppRole, nameOverride?: string) => {
     try {
+      const signUpUrl = `${getBackendBaseUrl()}/api/v1/auths/signup`;
+
       const cleanProvidedName =
         typeof nameOverride === 'string' ? nameOverride.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim() : '';
 
@@ -305,7 +283,7 @@ export function useAuth() {
       const apiKeyHeader = SIGNUP_API_KEY ? { [SIGNUP_API_KEY_HEADER]: SIGNUP_API_KEY } : {};
       const authHeader = { ...bearerHeader, ...apiKeyHeader };
 
-      const jsonRes = await fetch(SIGNUP_URL, {
+      const jsonRes = await fetch(signUpUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeader },
         credentials: 'include',
@@ -320,7 +298,7 @@ export function useAuth() {
         jsonData.detail.some((d: any) => Array.isArray(d?.loc) && d.loc.join('.') === 'body' && d.type === 'missing');
 
       const res = missingBody422
-        ? await fetch(SIGNUP_URL, {
+        ? await fetch(signUpUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...authHeader },
             credentials: 'include',
@@ -356,6 +334,8 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
+      const signOutUrl = `${getBackendBaseUrl()}/api/v1/auths/signout`;
+
       const authValue = SIGNUP_BEARER_TOKEN
         ? SIGNUP_BEARER_TOKEN.toLowerCase().startsWith('bearer ')
           ? SIGNUP_BEARER_TOKEN
@@ -368,7 +348,7 @@ export function useAuth() {
 
       const headers = { Accept: 'application/json', ...authHeader };
 
-      await fetch(SIGNOUT_URL, {
+      await fetch(signOutUrl, {
         method: 'GET',
         headers,
         credentials: 'include',
