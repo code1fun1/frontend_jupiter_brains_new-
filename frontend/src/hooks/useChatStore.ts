@@ -263,10 +263,8 @@ export function useChatStore() {
       const fp = computeFingerprint();
       if (fp === lastAuthFingerprintRef.current) return;
       lastAuthFingerprintRef.current = fp;
-
       const [emailPart, tokenPart] = fp.split('::');
       const isLoggedOut = !String(emailPart || '').trim() && !String(tokenPart || '').trim();
-
       setSessions([]);
       setCurrentSessionId(null);
       setModels(readCachedModels() || DEFAULT_MODELS);

@@ -23,11 +23,10 @@ type AuthFormData = z.infer<typeof authSchema>;
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { user, isLoading, isAdmin, signIn, signUp, signInWithGoogle, signInWithGithub } = useAuth();
+  const { user, isLoading, signIn, signUp, signInWithGoogle, signInWithGithub } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
-  const [persona, setPersona] = useState<'user' | 'admin'>('user');
 
   const form = useForm<AuthFormData>({
     resolver: zodResolver(authSchema),
@@ -47,18 +46,18 @@ export default function Auth() {
     if (isLoading || !user || !isRedirecting) return;
 
     const t = window.setTimeout(() => {
-      navigate(isAdmin ? '/admin' : '/');
+      navigate('/');
     }, 600);
 
     return () => window.clearTimeout(t);
-  }, [user, isLoading, isAdmin, navigate, isRedirecting]);
+  }, [user, isLoading, navigate, isRedirecting]);
 
   const handleSubmit = async (data: AuthFormData) => {
     setIsSubmitting(true);
     
     try {
       if (activeTab === 'login') {
-        const { error } = await signIn(data.email, data.password, persona);
+        const { error } = await signIn(data.email, data.password);
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
             toast.error('Invalid email or password');
@@ -149,15 +148,6 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6">
-            <Tabs value={persona} onValueChange={(v) => setPersona(v as 'user' | 'admin')}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="user">Continue as User</TabsTrigger>
-                <TabsTrigger value="admin">Continue as Admin</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'login' | 'signup')}>
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Login</TabsTrigger>

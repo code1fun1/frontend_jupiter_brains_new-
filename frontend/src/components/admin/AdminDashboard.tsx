@@ -20,7 +20,6 @@ interface AdminDashboardProps {
   onClose: () => void;
   models: AIModel[];
   onUpdateModel: (modelId: string, updates: Partial<AIModel>) => void;
-  onAddModel: (model: Omit<AIModel, 'id'>) => void;
   onRemoveModel: (modelId: string) => void;
 }
 
@@ -29,7 +28,6 @@ export function AdminDashboard({
   onClose,
   models,
   onUpdateModel,
-  onAddModel,
   onRemoveModel,
 }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -77,7 +75,6 @@ export function AdminDashboard({
               <ModelConfiguration
                 models={models}
                 onUpdateModel={onUpdateModel}
-                onAddModel={onAddModel}
                 onRemoveModel={onRemoveModel}
               />
             </TabsContent>

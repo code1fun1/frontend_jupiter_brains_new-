@@ -101,6 +101,12 @@ export function useAuth() {
     } catch {
       // ignore
     }
+
+    try {
+      window.dispatchEvent(new Event('jb-auth-changed'));
+    } catch {
+      // ignore
+    }
   }, []);
 
   const setSessionUser = useCallback(
@@ -152,6 +158,12 @@ export function useAuth() {
       } catch {
         // ignore
       }
+    }
+
+    try {
+      window.dispatchEvent(new Event('jb-auth-changed'));
+    } catch {
+      // ignore
     }
   }, []);
 
@@ -238,7 +250,10 @@ export function useAuth() {
       const payload = data?.user && typeof data.user === 'object' ? data.user : data;
       const id = payload?.id ?? payload?.user_id ?? payload?._id;
       const resolvedEmail = payload?.email || email;
-      const role = (roleOverride || payload?.role || 'user') as AppRole;
+
+      const apiRoleRaw = payload?.role;
+      const apiRole: AppRole | null = apiRoleRaw === 'admin' || apiRoleRaw === 'user' ? apiRoleRaw : null;
+      const role = (apiRole || roleOverride || 'user') as AppRole;
 
       const name = typeof payload?.name === 'string' ? payload.name : undefined;
       const profile_image_url = typeof payload?.profile_image_url === 'string' ? payload.profile_image_url : undefined;
@@ -358,8 +373,20 @@ export function useAuth() {
     }
 
     try {
+      let emailKey = '';
+      try {
+        const raw = localStorage.getItem(STATIC_AUTH_STORAGE_KEY);
+        const parsed = raw ? (JSON.parse(raw) as any) : null;
+        emailKey = typeof parsed?.email === 'string' ? parsed.email.trim().toLowerCase() : '';
+      } catch {
+        emailKey = '';
+      }
+
       localStorage.removeItem(STATIC_AUTH_STORAGE_KEY);
       localStorage.removeItem(STATIC_AUTH_SESSION_KEY);
+      localStorage.removeItem('jb_openai_config_overview');
+      if (emailKey) localStorage.removeItem(`jb_openai_config_overview:${emailKey}`);
+      localStorage.removeItem('jb_openai_config_form');
     } catch {
       // ignore
     }
@@ -371,6 +398,12 @@ export function useAuth() {
       isAdmin: false,
       isLoading: false,
     });
+
+    try {
+      window.dispatchEvent(new Event('jb-auth-changed'));
+    } catch {
+      // ignore
+    }
     return { error: null };
   };
 

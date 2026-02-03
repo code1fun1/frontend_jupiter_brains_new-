@@ -54,7 +54,7 @@ export function ModelSelector({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="w-64 bg-popover border border-border shadow-lg z-50"
+        className="w-64 bg-popover border border-border shadow-lg z-50 max-h-80 overflow-y-auto"
       >
         {models.map((model) => (
           <DropdownMenuItem

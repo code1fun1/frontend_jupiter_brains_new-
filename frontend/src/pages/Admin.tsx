@@ -18,7 +18,7 @@ export default function Admin() {
   const {
     models,
     updateModel,
-    addModel,
+    refreshModels,
     removeModel,
   } = useChatStoreContext();
 
@@ -107,8 +107,8 @@ export default function Admin() {
               <ModelConfiguration
                 models={models}
                 onUpdateModel={updateModel}
-                onAddModel={addModel}
                 onRemoveModel={removeModel}
+                onRefreshModels={refreshModels}
               />
             </TabsContent>
 
