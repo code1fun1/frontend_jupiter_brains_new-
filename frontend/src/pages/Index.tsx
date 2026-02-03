@@ -18,6 +18,7 @@ const Index = () => {
     enabledModels,
     models,
     ensureModelsLoaded,
+    refreshModels,
     selectedModel,
     isLoading,
     createNewSession,
@@ -81,7 +82,7 @@ const Index = () => {
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}
           onOpenModels={() => {
-            ensureModelsLoaded();
+            refreshModels();
           }}
           onOpenSidebar={() => setIsSidebarOpen(true)}
           isSidebarOpen={isSidebarOpen}
