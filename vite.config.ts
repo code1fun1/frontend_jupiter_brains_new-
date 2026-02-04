@@ -5,7 +5,13 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const backendBaseUrl = (env.VITE_BACKEND_BASE_URL || "http://localhost:8081").replace(/\/$/, "");
+  const backendBaseUrl = env.VITE_BACKEND_BASE_URL;
+
+  if (!backendBaseUrl) {
+    throw new Error('VITE_BACKEND_BASE_URL is not configured. Please set it in your .env file.');
+  }
+
+  const cleanedBackendUrl = backendBaseUrl.replace(/\/$/, "");
 
   return {
     root: "frontend",
@@ -17,7 +23,7 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         "/api": {
-          target: backendBaseUrl,
+          target: cleanedBackendUrl,
           changeOrigin: true,
           secure: false,
         },

@@ -1,13 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Message, ChatSession, AIModel, DEFAULT_MODELS } from '@/types/chat';
+import { getBackendBaseUrl, API_ENDPOINTS } from '@/utils/config';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
-
-const getBackendBaseUrl = () => {
-  const raw = (import.meta as any)?.env?.VITE_BACKEND_BASE_URL;
-  const base = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
-  return (base || 'http://localhost:8081').replace(/\/$/, '');
-};
 
 const STATIC_AUTH_SESSION_KEY = 'jb_static_auth_session';
 
@@ -17,7 +12,7 @@ const MODELS_BEARER_TOKEN =
   (import.meta as any)?.env?.VITE_MODELS_BEARER_TOKEN && typeof (import.meta as any).env.VITE_MODELS_BEARER_TOKEN === 'string'
     ? (import.meta as any).env.VITE_MODELS_BEARER_TOKEN.replace(/"/g, '').trim()
     :
-      (import.meta as any)?.env?.VITE_AUTH_SIGNUP_BEARER_TOKEN &&
+    (import.meta as any)?.env?.VITE_AUTH_SIGNUP_BEARER_TOKEN &&
       typeof (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN === 'string'
       ? (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN.replace(/"/g, '').trim()
       : '';
@@ -40,23 +35,19 @@ const MODELS_API_KEY =
   (import.meta as any)?.env?.VITE_MODELS_API_KEY && typeof (import.meta as any).env.VITE_MODELS_API_KEY === 'string'
     ? (import.meta as any).env.VITE_MODELS_API_KEY.replace(/"/g, '').trim()
     :
-      (import.meta as any)?.env?.VITE_AUTH_SIGNUP_API_KEY && typeof (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY === 'string'
+    (import.meta as any)?.env?.VITE_AUTH_SIGNUP_API_KEY && typeof (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY === 'string'
       ? (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY.replace(/"/g, '').trim()
       : '';
 
 const MODELS_API_KEY_HEADER =
   (import.meta as any)?.env?.VITE_MODELS_API_KEY_HEADER &&
-  typeof (import.meta as any).env.VITE_MODELS_API_KEY_HEADER === 'string'
+    typeof (import.meta as any).env.VITE_MODELS_API_KEY_HEADER === 'string'
     ? (import.meta as any).env.VITE_MODELS_API_KEY_HEADER.replace(/"/g, '').trim()
     :
-      (import.meta as any)?.env?.VITE_AUTH_SIGNUP_API_KEY_HEADER &&
+    (import.meta as any)?.env?.VITE_AUTH_SIGNUP_API_KEY_HEADER &&
       typeof (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY_HEADER === 'string'
       ? (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY_HEADER.replace(/"/g, '').trim()
       : 'x-api-key';
-
-const getChatCompletionsUrl = () => `${getBackendBaseUrl()}/api/chat/completions`;
-
-const getModelsUrl = () => `${getBackendBaseUrl()}/api/models?`;
 
 const readCachedModels = (): AIModel[] | null => {
   try {
@@ -120,7 +111,7 @@ export function useChatStore() {
 
     const promise = (async () => {
       try {
-        const modelsUrl = getModelsUrl();
+        const modelsUrl = API_ENDPOINTS.models.list();
 
         const envToken = MODELS_BEARER_TOKEN;
         const storedToken = getStoredBearerToken();
@@ -327,7 +318,7 @@ export function useChatStore() {
 
   const sendMessage = useCallback(async (content: string) => {
     let session = currentSession;
-    
+
     if (!session) {
       session = createNewSession();
     }
@@ -358,7 +349,7 @@ export function useChatStore() {
     setIsLoading(true);
 
     try {
-      const chatUrl = getChatCompletionsUrl();
+      const chatUrl = API_ENDPOINTS.chat.completions();
 
       const envToken = MODELS_BEARER_TOKEN;
       const storedToken = getStoredBearerToken();

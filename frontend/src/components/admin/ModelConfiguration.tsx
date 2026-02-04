@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { getBackendBaseUrl, API_ENDPOINTS } from '@/utils/config';
 
 interface ModelConfigurationProps {
   models: AIModel[];
@@ -72,7 +73,9 @@ export function ModelConfiguration({
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${getBackendBaseUrl()}/openai/config`, {
+        const configUrl = API_ENDPOINTS.openai.config();
+
+        const res = await fetch(configUrl, {
           method: 'GET',
           headers: {
             Accept: 'application/json',
@@ -125,12 +128,6 @@ export function ModelConfiguration({
     toast.success('Loaded saved config into editor');
   };
 
-  const getBackendBaseUrl = () => {
-    const raw = (import.meta as any)?.env?.VITE_BACKEND_BASE_URL;
-    const base = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
-    return (base || 'http://localhost:8081').replace(/\/$/, '');
-  };
-
   const getStoredAuthHeader = (): Record<string, string> => {
     try {
       const raw = localStorage.getItem('jb_static_auth_session');
@@ -171,7 +168,9 @@ export function ModelConfiguration({
 
     setIsSavingOpenAIConfig(true);
     try {
-      const res = await fetch(`${getBackendBaseUrl()}/openai/config/update`, {
+      const updateConfigUrl = API_ENDPOINTS.openai.updateConfig();
+
+      const res = await fetch(updateConfigUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

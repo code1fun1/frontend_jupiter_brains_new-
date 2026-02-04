@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getBackendBaseUrl, API_ENDPOINTS } from '@/utils/config';
 
 export type AppRole = 'admin' | 'user';
 
@@ -6,15 +7,9 @@ const STATIC_AUTH_STORAGE_KEY = 'jb_static_auth';
 
 const STATIC_AUTH_SESSION_KEY = 'jb_static_auth_session';
 
-const getBackendBaseUrl = () => {
-  const raw = (import.meta as any)?.env?.VITE_BACKEND_BASE_URL;
-  const base = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
-  return (base || 'http://localhost:8081').replace(/\/$/, '');
-};
-
 const SIGNUP_BEARER_TOKEN =
   (import.meta as any)?.env?.VITE_AUTH_SIGNUP_BEARER_TOKEN &&
-  typeof (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN === 'string'
+    typeof (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN === 'string'
     ? (import.meta as any).env.VITE_AUTH_SIGNUP_BEARER_TOKEN.replace(/"/g, '').trim()
     : '';
 
@@ -25,7 +20,7 @@ const SIGNUP_API_KEY =
 
 const SIGNUP_API_KEY_HEADER =
   (import.meta as any)?.env?.VITE_AUTH_SIGNUP_API_KEY_HEADER &&
-  typeof (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY_HEADER === 'string'
+    typeof (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY_HEADER === 'string'
     ? (import.meta as any).env.VITE_AUTH_SIGNUP_API_KEY_HEADER.replace(/"/g, '').trim()
     : 'x-api-key';
 
@@ -128,44 +123,44 @@ export function useAuth() {
         role: payload.role,
         profile_image_url: payload.profile_image_url,
       };
-    setAuthState({
-      user,
-      session: null,
-      role: payload.role,
-      isAdmin: payload.role === 'admin',
-      isLoading: false,
-    });
-
-    try {
-      localStorage.setItem(
-        STATIC_AUTH_STORAGE_KEY,
-        JSON.stringify({ email: payload.email, role: payload.role, id: String(payload.id), name: payload.name })
-      );
-    } catch {
-      // ignore
-    }
-
-    if (payload.token) {
-      const session: StaticSession = {
-        token: payload.token,
-        token_type: payload.token_type,
-        expires_at: payload.expires_at,
-        permissions: payload.permissions,
-      };
+      setAuthState({
+        user,
+        session: null,
+        role: payload.role,
+        isAdmin: payload.role === 'admin',
+        isLoading: false,
+      });
 
       try {
-        localStorage.setItem(STATIC_AUTH_SESSION_KEY, JSON.stringify(session));
+        localStorage.setItem(
+          STATIC_AUTH_STORAGE_KEY,
+          JSON.stringify({ email: payload.email, role: payload.role, id: String(payload.id), name: payload.name })
+        );
       } catch {
         // ignore
       }
-    }
 
-    try {
-      window.dispatchEvent(new Event('jb-auth-changed'));
-    } catch {
-      // ignore
-    }
-  }, []);
+      if (payload.token) {
+        const session: StaticSession = {
+          token: payload.token,
+          token_type: payload.token_type,
+          expires_at: payload.expires_at,
+          permissions: payload.permissions,
+        };
+
+        try {
+          localStorage.setItem(STATIC_AUTH_SESSION_KEY, JSON.stringify(session));
+        } catch {
+          // ignore
+        }
+      }
+
+      try {
+        window.dispatchEvent(new Event('jb-auth-changed'));
+      } catch {
+        // ignore
+      }
+    }, []);
 
   useEffect(() => {
     try {
@@ -204,7 +199,7 @@ export function useAuth() {
 
   const signIn = async (email: string, password: string, roleOverride?: AppRole) => {
     try {
-      const signInUrl = `${getBackendBaseUrl()}/api/v1/auths/signin`;
+      const signInUrl = API_ENDPOINTS.auth.signIn();
 
       const authValue = SIGNUP_BEARER_TOKEN
         ? SIGNUP_BEARER_TOKEN.toLowerCase().startsWith('bearer ')
@@ -232,11 +227,11 @@ export function useAuth() {
 
       const res = missingBody422
         ? await fetch(signInUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...authHeader },
-            credentials: 'include',
-            body: new URLSearchParams({ email, password }).toString(),
-          })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...authHeader },
+          credentials: 'include',
+          body: new URLSearchParams({ email, password }).toString(),
+        })
         : jsonRes;
 
       const data = missingBody422 ? await res.json().catch(() => null) : jsonData;
@@ -277,7 +272,7 @@ export function useAuth() {
 
   const signOut = async () => {
     try {
-      const signOutUrl = `${getBackendBaseUrl()}/api/v1/auths/signout`;
+      const signOutUrl = API_ENDPOINTS.auth.signOut();
 
       const authValue = SIGNUP_BEARER_TOKEN
         ? SIGNUP_BEARER_TOKEN.toLowerCase().startsWith('bearer ')
