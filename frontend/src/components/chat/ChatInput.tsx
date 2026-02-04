@@ -3,6 +3,9 @@ import { ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ModelSuggestionDialog } from './ModelSuggestionDialog';
+import { ToolsMenu } from './ToolsMenu';
+import { toast } from 'sonner';
+import { useFileUpload } from '@/hooks/useFileUpload';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -20,6 +23,9 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
   const [suggestionType, setSuggestionType] = useState<SuggestionType>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // File upload hook
+  const { uploadFile, isUploading, uploadedFiles } = useFileUpload();
+
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -29,18 +35,18 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
 
   const checkForKeywords = (message: string): SuggestionType => {
     const lowerMessage = message.toLowerCase();
-    
+
     // Check for confidential/generate video keywords - suggest on-prem
-    if ((lowerMessage.includes('confidential') || lowerMessage.includes('generate video')) && 
-        selectedModel !== 'jupiterbrains') {
+    if ((lowerMessage.includes('confidential') || lowerMessage.includes('generate video')) &&
+      selectedModel !== 'jupiterbrains') {
       return 'onprem';
     }
-    
+
     // Check for strategy keyword - suggest ChatGPT
     if (lowerMessage.includes('strategy') && selectedModel !== 'chatgpt') {
       return 'chatgpt';
     }
-    
+
     return null;
   };
 
@@ -48,7 +54,7 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
     if (value.trim() && !isLoading && !disabled) {
       const message = value.trim();
       const suggestion = checkForKeywords(message);
-      
+
       if (suggestion) {
         setPendingMessage(message);
         setSuggestionType(suggestion);
@@ -68,7 +74,7 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
     } else if (suggestionType === 'chatgpt') {
       onChangeModel('chatgpt');
     }
-    
+
     if (pendingMessage) {
       onSend(pendingMessage);
       setValue('');
@@ -76,7 +82,7 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
         textareaRef.current.style.height = 'auto';
       }
     }
-    
+
     setPendingMessage(null);
     setSuggestionType(null);
   };
@@ -89,7 +95,7 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
         textareaRef.current.style.height = 'auto';
       }
     }
-    
+
     setPendingMessage(null);
     setSuggestionType(null);
   };
@@ -104,6 +110,21 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
       e.preventDefault();
       handleSubmit();
     }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    toast.info(`Uploading ${file.name}...`);
+    const fileId = await uploadFile(file);
+
+    if (fileId) {
+      toast.success(`${file.name} uploaded successfully!`);
+    }
+  };
+
+  const handleToolSelect = (tool: any) => {
+    toast.info(`Selected: ${tool.name}`, {
+      description: 'Tool integration coming soon!',
+    });
   };
 
   const getSuggestionDetails = () => {
@@ -128,6 +149,11 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
     <>
       <div className="relative w-full max-w-3xl mx-auto">
         <div className="relative flex items-end bg-card border border-border rounded-2xl shadow-lg">
+          {/* Plus Button (Tools Menu) */}
+          <div className="absolute left-2 bottom-2 z-10">
+            <ToolsMenu onToolSelect={handleToolSelect} onFileUpload={handleFileUpload} />
+          </div>
+
           <textarea
             ref={textareaRef}
             value={value}
@@ -137,7 +163,7 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
             disabled={disabled || isLoading}
             rows={1}
             className={cn(
-              'flex-1 resize-none bg-transparent px-4 py-3.5 pr-14 text-foreground placeholder:text-muted-foreground',
+              'flex-1 resize-none bg-transparent px-12 py-3.5 pr-14 text-foreground placeholder:text-muted-foreground',
               'focus:outline-none disabled:opacity-50 max-h-[200px] scrollbar-thin'
             )}
           />
