@@ -1,9 +1,25 @@
-import { useState } from 'react';
-import { Search, ArrowUpDown, TrendingUp, TrendingDown, User } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Search, ArrowUpDown, User } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { toast } from 'sonner';
 import {
   ChartContainer,
   ChartTooltip,
@@ -29,10 +45,25 @@ const userData = [
   { id: 8, name: 'Jennifer Martinez', email: 'j.martinez@company.com', credits: 367.90, requests: 1100, topModel: 'ChatGPT', overrides: 0, status: 'active' },
 ];
 
-const topUsersChartData = userData.slice(0, 5).map(user => ({
-  name: user.name.split(' ')[0],
-  credits: user.credits,
-}));
+const getBackendBaseUrl = () => {
+  const raw = (import.meta as any)?.env?.VITE_BACKEND_BASE_URL;
+  const base = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
+  return (base || 'http://localhost:8081').replace(/\/$/, '');
+};
+
+const getStoredAuthHeader = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem('jb_static_auth_session');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as any;
+    const token = typeof parsed?.token === 'string' ? parsed.token : '';
+    if (!token) return {};
+    const tokenType = typeof parsed?.token_type === 'string' ? parsed.token_type : 'Bearer';
+    return { Authorization: `${tokenType} ${token}`.trim() };
+  } catch {
+    return {};
+  }
+};
 
 const chartConfig = {
   credits: {
@@ -42,11 +73,26 @@ const chartConfig = {
 };
 
 export function UserBreakdown() {
+  const [users, setUsers] = useState(userData);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<'credits' | 'requests' | 'overrides'>('credits');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  const filteredUsers = userData
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [addRole, setAddRole] = useState<'admin' | 'user'>('user');
+  const [addName, setAddName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
+  const [addPassword, setAddPassword] = useState('');
+  const [isAddingUser, setIsAddingUser] = useState(false);
+
+  const topUsersChartData = useMemo(() => {
+    return users.slice(0, 5).map((u) => ({
+      name: u.name.split(' ')[0],
+      credits: u.credits,
+    }));
+  }, [users]);
+
+  const filteredUsers = users
     .filter(user => 
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -65,9 +111,80 @@ export function UserBreakdown() {
     }
   };
 
-  const totalCredits = userData.reduce((sum, user) => sum + user.credits, 0);
-  const avgCreditsPerUser = totalCredits / userData.length;
-  const totalOverrides = userData.reduce((sum, user) => sum + user.overrides, 0);
+  const totalCredits = users.reduce((sum, user) => sum + user.credits, 0);
+  const avgCreditsPerUser = users.length > 0 ? totalCredits / users.length : 0;
+  const totalOverrides = users.reduce((sum, user) => sum + user.overrides, 0);
+
+  const resetAddUserForm = () => {
+    setAddRole('user');
+    setAddName('');
+    setAddEmail('');
+    setAddPassword('');
+  };
+
+  const handleAddUser = async () => {
+    const name = addName.trim();
+    const email = addEmail.trim();
+    const password = addPassword;
+
+    if (!name || !email || !password) {
+      toast.error('Name, email, and password are required');
+      return;
+    }
+
+    setIsAddingUser(true);
+    try {
+      const url = `${getBackendBaseUrl()}/api/v1/auths/add`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...getStoredAuthHeader(),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ name, email, password, role: addRole }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const message =
+          typeof (data as any)?.detail === 'string'
+            ? (data as any).detail
+            : typeof (data as any)?.message === 'string'
+              ? (data as any).message
+              : `Failed to add user (HTTP ${res.status})`;
+        toast.error(message);
+        return;
+      }
+
+      toast.success('User added successfully');
+
+      const created = (data as any)?.user && typeof (data as any).user === 'object' ? (data as any).user : data;
+      const createdId = created?.id ?? created?.user_id ?? created?._id;
+      setUsers((prev) => [
+        {
+          id: typeof createdId === 'number' ? createdId : Number(createdId) || prev.length + 1,
+          name: String(created?.name ?? name),
+          email: String(created?.email ?? email),
+          credits: 0,
+          requests: 0,
+          topModel: 'JupiterBrains',
+          overrides: 0,
+          status: 'active',
+        },
+        ...prev,
+      ]);
+
+      setIsAddUserOpen(false);
+      resetAddUserForm();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to add user');
+    } finally {
+      setIsAddingUser(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -78,7 +195,7 @@ export function UserBreakdown() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Users</p>
-                <p className="text-2xl font-bold">{userData.length}</p>
+                <p className="text-2xl font-bold">{users.length}</p>
               </div>
               <User className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -124,8 +241,13 @@ export function UserBreakdown() {
       {/* User Table */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-lg">User Details</CardTitle>
-          <CardDescription>Complete breakdown of user activity</CardDescription>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg">User Details</CardTitle>
+              <CardDescription>Complete breakdown of user activity</CardDescription>
+            </div>
+            <Button onClick={() => setIsAddUserOpen(true)}>Add User</Button>
+          </div>
         </CardHeader>
         <CardContent>
           {/* Search */}
@@ -213,6 +335,76 @@ export function UserBreakdown() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={isAddUserOpen}
+        onOpenChange={(open) => {
+          setIsAddUserOpen(open);
+          if (!open) resetAddUserForm();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add User</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={addRole} onValueChange={(v) => setAddRole(v as 'admin' | 'user')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="add-user-name">Name</Label>
+              <Input
+                id="add-user-name"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                placeholder="Enter full name"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="add-user-email">Email</Label>
+              <Input
+                id="add-user-email"
+                value={addEmail}
+                onChange={(e) => setAddEmail(e.target.value)}
+                placeholder="Enter email"
+                type="email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="add-user-password">Password</Label>
+              <Input
+                id="add-user-password"
+                value={addPassword}
+                onChange={(e) => setAddPassword(e.target.value)}
+                placeholder="Enter password"
+                type="password"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddUserOpen(false)} disabled={isAddingUser}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddUser} disabled={isAddingUser}>
+              {isAddingUser ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
