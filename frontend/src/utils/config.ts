@@ -41,13 +41,6 @@ export const API_ENDPOINTS = {
         config: () => `${getBackendBaseUrl()}/openai/config`,
         updateConfig: () => `${getBackendBaseUrl()}/openai/config/update`,
     },
-    tools: {
-        list: () => `${getBackendBaseUrl()}/api/v1/tools/`,
-    },
-    files: {
-        upload: (process = true) => `${getBackendBaseUrl()}/api/v1/files/?process=${process}`,
-        status: (fileId: string, stream = true) => `${getBackendBaseUrl()}/api/v1/files/${fileId}/process/status?stream=${stream}`,
-    },
 } as const;
 
 /**

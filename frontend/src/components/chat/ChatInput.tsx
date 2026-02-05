@@ -3,9 +3,6 @@ import { ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ModelSuggestionDialog } from './ModelSuggestionDialog';
-import { ToolsMenu } from './ToolsMenu';
-import { toast } from 'sonner';
-import { useFileUpload } from '@/hooks/useFileUpload';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -22,9 +19,6 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [suggestionType, setSuggestionType] = useState<SuggestionType>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // File upload hook
-  const { uploadFile, isUploading, uploadedFiles } = useFileUpload();
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -112,21 +106,6 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
     }
   };
 
-  const handleFileUpload = async (file: File) => {
-    toast.info(`Uploading ${file.name}...`);
-    const fileId = await uploadFile(file);
-
-    if (fileId) {
-      toast.success(`${file.name} uploaded successfully!`);
-    }
-  };
-
-  const handleToolSelect = (tool: any) => {
-    toast.info(`Selected: ${tool.name}`, {
-      description: 'Tool integration coming soon!',
-    });
-  };
-
   const getSuggestionDetails = () => {
     if (suggestionType === 'onprem') {
       return {
@@ -149,11 +128,6 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
     <>
       <div className="relative w-full max-w-3xl mx-auto">
         <div className="relative flex items-end bg-card border border-border rounded-2xl shadow-lg">
-          {/* Plus Button (Tools Menu) */}
-          <div className="absolute left-2 bottom-2 z-10">
-            <ToolsMenu onToolSelect={handleToolSelect} onFileUpload={handleFileUpload} />
-          </div>
-
           <textarea
             ref={textareaRef}
             value={value}
@@ -163,7 +137,7 @@ export function ChatInput({ onSend, isLoading, disabled, selectedModel, onChange
             disabled={disabled || isLoading}
             rows={1}
             className={cn(
-              'flex-1 resize-none bg-transparent px-12 py-3.5 pr-14 text-foreground placeholder:text-muted-foreground',
+              'flex-1 resize-none bg-transparent px-4 py-3.5 pr-14 text-foreground placeholder:text-muted-foreground',
               'focus:outline-none disabled:opacity-50 max-h-[200px] scrollbar-thin'
             )}
           />
