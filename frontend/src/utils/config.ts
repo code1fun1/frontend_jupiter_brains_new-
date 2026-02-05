@@ -33,6 +33,7 @@ export const API_ENDPOINTS = {
     },
     chat: {
         completions: () => `${getBackendBaseUrl()}/api/chat/completions`,
+        completed: () => `${getBackendBaseUrl()}/api/chat/completed`,
         create: () => `${getBackendBaseUrl()}/api/v1/chats/new`,
         list: (page: number = 1) => `${getBackendBaseUrl()}/api/v1/chats/?page=${page}`,
         get: (id: string) => `${getBackendBaseUrl()}/api/v1/chats/${id}`,

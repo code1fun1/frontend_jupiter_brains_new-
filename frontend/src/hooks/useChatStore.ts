@@ -690,7 +690,6 @@ export function useChatStore() {
           model: modelToUse,
           messages: history,
           session_id: session?.id,
-          skip_recommendation: !!modelOverride, // Skip recommendation if user already chose
         }),
       });
 
@@ -767,6 +766,120 @@ export function useChatStore() {
           return s;
         })
       );
+
+      // Call /api/chat/completed to save the conversation
+      try {
+        const updatedMessages = [...session!.messages, assistantMessage];
+
+        // Convert messages to backend format
+        const formattedMessages = updatedMessages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: Math.floor(msg.timestamp.getTime() / 1000), // Convert to Unix timestamp
+        }));
+
+        const completedPayload = {
+          model: modelToUse,
+          messages: formattedMessages,
+          chat_id: session!.id,
+          session_id: session!.id, // Using chat ID as session ID
+          id: assistantMessage.id,
+        };
+
+        console.log('Calling /api/chat/completed with payload:', completedPayload);
+
+        const completedResponse = await fetch(API_ENDPOINTS.chat.completed(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(completedPayload),
+        });
+
+        if (completedResponse.ok) {
+          const completedData = await completedResponse.json();
+          console.log('Chat saved successfully:', completedData);
+
+          // Now call POST /api/v1/chats/{id} to update chat with history structure
+          try {
+            // Build messages object with parent-child relationships
+            const messagesObject: any = {};
+            const messagesArray: any[] = [];
+
+            updatedMessages.forEach((msg, index) => {
+              const isUser = msg.role === 'user';
+              const isAssistant = msg.role === 'assistant';
+
+              // Determine parent and children
+              const parentId = index > 0 ? updatedMessages[index - 1].id : null;
+              const childrenIds = index < updatedMessages.length - 1 ? [updatedMessages[index + 1].id] : [];
+
+              const messageObj: any = {
+                id: msg.id,
+                parentId: parentId,
+                childrenIds: childrenIds,
+                role: msg.role,
+                content: msg.content,
+                timestamp: Math.floor(msg.timestamp.getTime() / 1000),
+              };
+
+              if (isUser) {
+                messageObj.models = [modelToUse];
+              }
+
+              if (isAssistant) {
+                messageObj.model = modelToUse;
+                messageObj.modelName = modelToUse;
+                messageObj.modelIdx = 0;
+                messageObj.done = true;
+              }
+
+              messagesObject[msg.id] = messageObj;
+              messagesArray.push(messageObj);
+            });
+
+            const chatUpdatePayload = {
+              chat: {
+                models: [modelToUse],
+                history: {
+                  messages: messagesObject,
+                  currentId: assistantMessage.id,
+                },
+                messages: messagesArray,
+                params: {},
+                files: [],
+              },
+            };
+
+            console.log('Calling POST /api/v1/chats/' + session!.id);
+
+            const chatUpdateResponse = await fetch(API_ENDPOINTS.chat.rename(session!.id), {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+              body: JSON.stringify(chatUpdatePayload),
+            });
+
+            if (chatUpdateResponse.ok) {
+              const chatUpdateData = await chatUpdateResponse.json();
+              console.log('Chat updated with history successfully:', chatUpdateData);
+            } else {
+              console.error('Failed to update chat with history:', chatUpdateResponse.status);
+            }
+          } catch (historyError) {
+            console.error('Error updating chat with history:', historyError);
+          }
+        } else {
+          console.error('Failed to save completed chat:', completedResponse.status);
+        }
+      } catch (error) {
+        console.error('Error calling /api/chat/completed:', error);
+        // Don't fail the whole flow if this fails
+      }
 
       return {
         isRecommendation: false,
