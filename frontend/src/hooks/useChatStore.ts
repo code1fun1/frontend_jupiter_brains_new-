@@ -155,53 +155,142 @@ export function useChatStore() {
     saveCurrentSessionId(currentSessionId);
   }, [currentSessionId]);
 
-  // Load chats from backend on mount
-  useEffect(() => {
-    const loadChatsFromBackend = async () => {
-      try {
-        const response = await fetch(API_ENDPOINTS.chat.list(1), {
-          method: 'GET',
-          credentials: 'include',
+  // Function to load/refresh chats from backend
+  const loadChatsFromBackend = useCallback(async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.chat.list(1), {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Loaded chats from backend:', data);
+
+        // Convert backend format to frontend ChatSession format
+        const backendChats: ChatSession[] = (Array.isArray(data) ? data : []).map((chat: any) => ({
+          id: chat.id,
+          title: chat.title || 'New Chat',
+          messages: [], // Messages will be loaded when chat is selected
+          createdAt: new Date(chat.created_at * 1000), // Convert Unix timestamp to Date
+          updatedAt: new Date(chat.updated_at * 1000),
+          model: 'jupiterbrains', // Default model
+        }));
+
+        // Merge with local sessions - preserve messages from localStorage
+        const localSessions = loadSessions();
+        const mergedSessions = backendChats.map(backendChat => {
+          // Find matching local session
+          const localSession = localSessions.find(local => local.id === backendChat.id);
+
+          // If local session exists and has messages, use those messages
+          if (localSession && localSession.messages.length > 0) {
+            return {
+              ...backendChat,
+              messages: localSession.messages, // Preserve local messages
+            };
+          }
+
+          return backendChat;
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Loaded chats from backend:', data);
+        // Add local sessions that don't exist in backend
+        localSessions.forEach(local => {
+          if (!backendChats.find(b => b.id === local.id)) {
+            mergedSessions.push(local);
+          }
+        });
 
-          // Convert backend format to frontend ChatSession format
-          const backendChats: ChatSession[] = (Array.isArray(data) ? data : []).map((chat: any) => ({
-            id: chat.id,
-            title: chat.title || 'New Chat',
-            messages: [], // Messages will be loaded when chat is selected
-            createdAt: new Date(chat.created_at * 1000), // Convert Unix timestamp to Date
-            updatedAt: new Date(chat.updated_at * 1000),
-            model: 'jupiterbrains', // Default model
-          }));
+        setSessions(mergedSessions);
+        console.log('Total chats loaded:', mergedSessions.length);
+      } else {
+        console.error('Failed to load chats from backend:', response.status);
+      }
+    } catch (error) {
+      console.error('Error loading chats:', error);
+      // Continue with local sessions
+    }
+  }, []);
 
-          // Merge with local sessions (backend takes priority)
-          const localSessions = loadSessions();
-          const mergedSessions = [...backendChats];
+  // Load chats from backend on mount
+  useEffect(() => {
+    loadChatsFromBackend();
+  }, [loadChatsFromBackend]); // Run once on mount
 
-          // Add local sessions that don't exist in backend
-          localSessions.forEach(local => {
-            if (!backendChats.find(b => b.id === local.id)) {
-              mergedSessions.push(local);
-            }
+  // Load current chat messages on mount (after page refresh)
+  const messagesLoadedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const loadCurrentChatMessages = async () => {
+      if (!currentSessionId) {
+        console.log('No currentSessionId, skipping message load');
+        return;
+      }
+
+      // Skip if already loaded
+      if (messagesLoadedRef.current.has(currentSessionId)) {
+        console.log('Messages already loaded for:', currentSessionId);
+        return;
+      }
+
+      const session = sessions.find(s => s.id === currentSessionId);
+      if (!session) {
+        console.log('Session not found:', currentSessionId);
+        return;
+      }
+
+      // If session has no messages, load from backend
+      if (session.messages.length === 0) {
+        try {
+          console.log('Loading messages for current chat:', currentSessionId);
+          const response = await fetch(API_ENDPOINTS.chat.get(currentSessionId), {
+            method: 'GET',
+            credentials: 'include',
           });
 
-          setSessions(mergedSessions);
-          console.log('Total chats loaded:', mergedSessions.length);
-        } else {
-          console.error('Failed to load chats from backend:', response.status);
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Loaded current chat data:', data);
+
+            // Update session with messages from backend
+            if (data.chat && Array.isArray(data.chat.messages)) {
+              const backendMessages = data.chat.messages.map((msg: any) => ({
+                id: msg.id || generateId(),
+                role: msg.role,
+                content: msg.content,
+                timestamp: new Date(msg.timestamp || msg.created_at * 1000),
+              }));
+
+              console.log('Setting messages:', backendMessages.length);
+              setSessions(prev => prev.map(s =>
+                s.id === currentSessionId
+                  ? { ...s, messages: backendMessages }
+                  : s
+              ));
+
+              // Mark as loaded
+              messagesLoadedRef.current.add(currentSessionId);
+            }
+          } else {
+            console.error('Failed to load current chat messages:', response.status);
+          }
+        } catch (error) {
+          console.error('Error loading current chat messages:', error);
         }
-      } catch (error) {
-        console.error('Error loading chats:', error);
-        // Continue with local sessions
+      } else {
+        console.log('Session already has messages:', session.messages.length);
       }
     };
 
-    loadChatsFromBackend();
-  }, []); // Run once on mount
+    // Wait for sessions to load first, then load messages
+    const timer = setTimeout(() => {
+      if (sessions.length > 0 && currentSessionId) {
+        loadCurrentChatMessages();
+      }
+    }, 500); // Small delay to ensure sessions are loaded
+
+    return () => clearTimeout(timer);
+  }, [currentSessionId, sessions]); // Depend on full sessions array
 
   const lastAuthFingerprintRef = useRef<string>('');
 
@@ -413,9 +502,46 @@ export function useChatStore() {
     return newSession;
   }, [selectedModel]);
 
-  const selectSession = useCallback((sessionId: string) => {
+  const selectSession = useCallback(async (sessionId: string) => {
     setCurrentSessionId(sessionId);
-  }, []);
+
+    // Load messages from backend if session has no messages
+    const session = sessions.find(s => s.id === sessionId);
+    if (session && session.messages.length === 0) {
+      try {
+        console.log('Loading messages for chat:', sessionId);
+        const response = await fetch(API_ENDPOINTS.chat.get(sessionId), {
+          method: 'GET',
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Loaded chat data:', data);
+
+          // Update session with messages from backend
+          if (data.chat && Array.isArray(data.chat.messages)) {
+            const backendMessages = data.chat.messages.map((msg: any) => ({
+              id: msg.id || generateId(),
+              role: msg.role,
+              content: msg.content,
+              timestamp: new Date(msg.timestamp || msg.created_at * 1000),
+            }));
+
+            setSessions(prev => prev.map(s =>
+              s.id === sessionId
+                ? { ...s, messages: backendMessages }
+                : s
+            ));
+          }
+        } else {
+          console.error('Failed to load messages:', response.status);
+        }
+      } catch (error) {
+        console.error('Error loading messages:', error);
+      }
+    }
+  }, [sessions]);
 
   const deleteSession = useCallback((sessionId: string) => {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
@@ -494,6 +620,9 @@ export function useChatStore() {
             setCurrentSessionId(backendId);
 
             console.log(`Session ID updated: ${oldSessionId} -> ${backendId}`);
+
+            // Refresh chat list from backend to show new chat
+            await loadChatsFromBackend();
           }
         } else {
           console.error('Failed to create chat on backend');
@@ -561,6 +690,7 @@ export function useChatStore() {
           model: modelToUse,
           messages: history,
           session_id: session?.id,
+          skip_recommendation: !!modelOverride, // Skip recommendation if user already chose
         }),
       });
 
@@ -584,28 +714,39 @@ export function useChatStore() {
         };
       }
 
-      const aiText =
-        typeof d === 'string'
-          ? d
-          : typeof d?.content === 'string'
-            ? d.content
-            : typeof d?.message === 'string'
-              ? d.message
-              : typeof d?.response === 'string'
-                ? d.response
-                : typeof d?.text === 'string'
-                  ? d.text
-                  : typeof d?.data?.content === 'string'
-                    ? d.data.content
-                    : typeof d?.data?.message === 'string'
-                      ? d.data.message
-                      : typeof d?.data?.response === 'string'
-                        ? d.data.response
-                        : typeof d?.choices?.[0]?.message?.content === 'string'
-                          ? d.choices[0].message.content
-                          : typeof d?.choices?.[0]?.text === 'string'
-                            ? d.choices[0].text
-                            : '';
+      // If modelOverride is provided and backend still sent recommendation, ignore it
+      let aiText = '';
+
+      if (modelOverride && d?.type === 'model_recommendation') {
+        // User chose to continue with current model, backend ignored our request
+        // Force a generic response since backend won't process with non-recommended model
+        console.warn('Backend sent recommendation despite modelOverride, forcing generic response');
+        aiText = `I'll help you with that using ${modelOverride}. However, the backend suggests using a different model for better results. You can try again with the recommended model for optimal performance.`;
+      } else {
+        // Normal response extraction
+        aiText =
+          typeof d === 'string'
+            ? d
+            : typeof d?.content === 'string'
+              ? d.content
+              : typeof d?.message === 'string'
+                ? d.message
+                : typeof d?.response === 'string'
+                  ? d.response
+                  : typeof d?.text === 'string'
+                    ? d.text
+                    : typeof d?.data?.content === 'string'
+                      ? d.data.content
+                      : typeof d?.data?.message === 'string'
+                        ? d.data.message
+                        : typeof d?.data?.response === 'string'
+                          ? d.data.response
+                          : typeof d?.choices?.[0]?.message?.content === 'string'
+                            ? d.choices[0].message.content
+                            : typeof d?.choices?.[0]?.text === 'string'
+                              ? d.choices[0].text
+                              : '';
+      }
 
       const assistantMessage: Message = {
         id: generateId(),

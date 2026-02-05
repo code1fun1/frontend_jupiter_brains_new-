@@ -50,7 +50,7 @@ export default function Auth() {
 
   const handleSubmit = async (data: AuthFormData) => {
     setIsSubmitting(true);
-    
+
     try {
       const { error } = await signIn(data.email, data.password);
       if (error) {
@@ -170,6 +170,8 @@ export default function Auth() {
             </form>
           </Form>
 
+          {/* Temporarily commented out for testing */}
+          {/*
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-border" />
@@ -197,6 +199,7 @@ export default function Auth() {
               GitHub
             </Button>
           </div>
+          */}
 
           <p className="text-xs text-muted-foreground text-center mt-6">
             By signing up, you agree to our Terms of Service and Privacy Policy.
