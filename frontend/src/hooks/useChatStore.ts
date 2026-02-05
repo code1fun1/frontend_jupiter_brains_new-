@@ -87,12 +87,73 @@ const generateTitle = (content: string): string => {
   return words.length > 30 ? words.substring(0, 30) + '...' : words;
 };
 
+const SESSIONS_STORAGE_KEY = 'jb_chat_sessions';
+const CURRENT_SESSION_KEY = 'jb_current_session_id';
+
+const loadSessions = (): ChatSession[] => {
+  try {
+    const stored = localStorage.getItem(SESSIONS_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    // Convert date strings back to Date objects
+    return parsed.map((s: any) => ({
+      ...s,
+      createdAt: new Date(s.createdAt),
+      updatedAt: new Date(s.updatedAt),
+      messages: s.messages.map((m: any) => ({
+        ...m,
+        timestamp: new Date(m.timestamp),
+      })),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const saveSessions = (sessions: ChatSession[]) => {
+  try {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+  } catch (e) {
+    console.error('Failed to save sessions:', e);
+  }
+};
+
+const loadCurrentSessionId = (): string | null => {
+  try {
+    return localStorage.getItem(CURRENT_SESSION_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const saveCurrentSessionId = (id: string | null) => {
+  try {
+    if (id) {
+      localStorage.setItem(CURRENT_SESSION_KEY, id);
+    } else {
+      localStorage.removeItem(CURRENT_SESSION_KEY);
+    }
+  } catch (e) {
+    console.error('Failed to save current session ID:', e);
+  }
+};
+
 export function useChatStore() {
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>(() => loadSessions());
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => loadCurrentSessionId());
   const [models, setModels] = useState<AIModel[]>(() => readCachedModels() || DEFAULT_MODELS);
   const [selectedModel, setSelectedModel] = useState<string>('jupiterbrains');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Save sessions whenever they change
+  useEffect(() => {
+    saveSessions(sessions);
+  }, [sessions]);
+
+  // Save current session ID whenever it changes
+  useEffect(() => {
+    saveCurrentSessionId(currentSessionId);
+  }, [currentSessionId]);
 
   const lastAuthFingerprintRef = useRef<string>('');
 
@@ -316,7 +377,7 @@ export function useChatStore() {
     }
   }, [currentSessionId]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, modelOverride?: string) => {
     let session = currentSession;
 
     if (!session) {
@@ -368,6 +429,9 @@ export function useChatStore() {
         content: m.content,
       }));
 
+      // Use modelOverride if provided, otherwise use selectedModel
+      const modelToUse = modelOverride || selectedModel;
+
       const res = await fetch(chatUrl, {
         method: 'POST',
         headers: {
@@ -378,8 +442,7 @@ export function useChatStore() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          model: selectedModel,
-          message: content,
+          model: modelToUse,
           messages: history,
           session_id: session?.id,
         }),
@@ -393,6 +456,31 @@ export function useChatStore() {
       }
 
       const d: any = data as any;
+
+      // Check if response is a model recommendation
+      // BUT: If modelOverride is provided, user already made a choice, so ignore recommendation
+      if (d?.type === 'model_recommendation' && !modelOverride) {
+        // Remove the user message we just added since we'll add it again after user chooses
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id === session!.id) {
+              return {
+                ...s,
+                messages: s.messages.slice(0, -1), // Remove last message (the user message we just added)
+                updatedAt: new Date(),
+              };
+            }
+            return s;
+          })
+        );
+
+        // Return recommendation to caller (ChatArea will handle popup)
+        return {
+          isRecommendation: true,
+          recommendation: d,
+        };
+      }
+
       const aiText =
         typeof d === 'string'
           ? d
@@ -435,6 +523,10 @@ export function useChatStore() {
           return s;
         })
       );
+
+      return {
+        isRecommendation: false,
+      };
     } catch (e: any) {
       const assistantMessage: Message = {
         id: generateId(),

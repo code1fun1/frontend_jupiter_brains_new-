@@ -1,13 +1,14 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { Message } from '@/types/chat';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import jupiterBrainsLogo from '@/assets/jupiter-brains-logo.png';
+import { ModelSuggestionDialog } from './ModelSuggestionDialog';
 
 interface ChatAreaProps {
   messages: Message[];
-  onSend: (message: string) => void;
+  onSend: (message: string, modelOverride?: string) => Promise<any>;
   isLoading: boolean;
   selectedModelName: string;
   selectedModel: string;
@@ -16,6 +17,8 @@ interface ChatAreaProps {
 
 export function ChatArea({ messages, onSend, isLoading, selectedModelName, selectedModel, onChangeModel }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [recommendation, setRecommendation] = useState<any>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -77,12 +80,52 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
       {/* Input Area */}
       <div className="flex-shrink-0 p-4 pb-6">
         <ChatInput
-          onSend={onSend}
+          onSend={handleSend}
           isLoading={isLoading}
-          selectedModel={selectedModel}
-          onChangeModel={onChangeModel}
         />
       </div>
+
+      {/* Model Recommendation Dialog */}
+      <ModelSuggestionDialog
+        isOpen={recommendation !== null}
+        onClose={() => {
+          setRecommendation(null);
+          setPendingMessage(null);
+        }}
+        onConfirm={async () => {
+          if (recommendation && pendingMessage) {
+            // Switch to recommended model and send message with that model
+            onChangeModel(recommendation.recommended_model);
+            // Pass recommended model directly to API call
+            await onSend(pendingMessage, recommendation.recommended_model);
+          }
+          setRecommendation(null);
+          setPendingMessage(null);
+        }}
+        onCancel={async () => {
+          if (pendingMessage) {
+            // Continue with current model - send message with current model
+            await onSend(pendingMessage, selectedModel);
+          }
+          setRecommendation(null);
+          setPendingMessage(null);
+        }}
+        suggestedModel={recommendation?.recommended_model || ''}
+        reason={recommendation?.reason || ''}
+      />
     </div>
   );
+
+  async function handleSend(message: string) {
+    setPendingMessage(message);
+    const result = await onSend(message);
+
+    // Check if result contains model recommendation
+    if (result?.isRecommendation) {
+      setRecommendation(result.recommendation);
+      // Don't clear pending message - we'll use it when user chooses
+    } else {
+      setPendingMessage(null);
+    }
+  }
 }
