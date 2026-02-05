@@ -391,21 +391,90 @@ export function useChatStore() {
       timestamp: new Date(),
     };
 
-    // Update session with user message
-    setSessions((prev) =>
-      prev.map((s) => {
-        if (s.id === session!.id) {
-          const updatedMessages = [...s.messages, userMessage];
-          return {
-            ...s,
-            messages: updatedMessages,
-            title: s.messages.length === 0 ? generateTitle(content) : s.title,
-            updatedAt: new Date(),
-          };
+    // If this is the first message in the session, call create chat API
+    const isFirstMessage = session.messages.length === 0;
+
+    if (isFirstMessage) {
+      try {
+        const createPayload = {
+          chat: {
+            id: "",
+            title: "New Chat",
+            models: [modelOverride || selectedModel],
+            params: {},
+            messages: [{
+              id: userMessage.id,
+              parentId: null,
+              childrenIds: [],
+              role: "user",
+              content: userMessage.content,
+              models: [modelOverride || selectedModel],
+              timestamp: Math.floor(userMessage.timestamp.getTime() / 1000),
+            }],
+            tags: [],
+            timestamp: Date.now(),
+          },
+          folder_id: null,
+        };
+
+        const createResponse = await fetch(API_ENDPOINTS.chat.create(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(createPayload),
+        });
+
+        if (createResponse.ok) {
+          const createData = await createResponse.json();
+          console.log('Chat created on backend:', createData);
+
+          // Update session ID with backend ID
+          if (createData.id) {
+            const backendId = createData.id;
+            const oldSessionId = session.id;
+
+            // Update session object
+            session = { ...session, id: backendId };
+
+            // Update in sessions array
+            setSessions((prev) =>
+              prev.map((s) => (s.id === oldSessionId ? { ...s, id: backendId } : s))
+            );
+
+            // Update current session ID
+            setCurrentSessionId(backendId);
+
+            console.log(`Session ID updated: ${oldSessionId} -> ${backendId}`);
+          }
+        } else {
+          console.error('Failed to create chat on backend');
         }
-        return s;
-      })
-    );
+      } catch (error) {
+        console.error('Error creating chat:', error);
+        // Continue with local session
+      }
+    }
+
+    // Update session with user message (only if this is the first call, not a retry)
+    // If modelOverride is provided, it means user made a choice from popup and message is already added
+    if (!modelOverride) {
+      setSessions((prev) =>
+        prev.map((s) => {
+          if (s.id === session!.id) {
+            const updatedMessages = [...s.messages, userMessage];
+            return {
+              ...s,
+              messages: updatedMessages,
+              title: s.messages.length === 0 ? generateTitle(content) : s.title,
+              updatedAt: new Date(),
+            };
+          }
+          return s;
+        })
+      );
+    }
 
     setIsLoading(true);
 
@@ -460,20 +529,7 @@ export function useChatStore() {
       // Check if response is a model recommendation
       // BUT: If modelOverride is provided, user already made a choice, so ignore recommendation
       if (d?.type === 'model_recommendation' && !modelOverride) {
-        // Remove the user message we just added since we'll add it again after user chooses
-        setSessions((prev) =>
-          prev.map((s) => {
-            if (s.id === session!.id) {
-              return {
-                ...s,
-                messages: s.messages.slice(0, -1), // Remove last message (the user message we just added)
-                updatedAt: new Date(),
-              };
-            }
-            return s;
-          })
-        );
-
+        // Don't remove user message - keep it and just show popup
         // Return recommendation to caller (ChatArea will handle popup)
         return {
           isRecommendation: true,

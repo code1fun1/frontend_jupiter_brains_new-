@@ -94,9 +94,9 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
         }}
         onConfirm={async () => {
           if (recommendation && pendingMessage) {
-            // Switch to recommended model and send message with that model
+            // Switch to recommended model
             onChangeModel(recommendation.recommended_model);
-            // Pass recommended model directly to API call
+            // Resend with modelOverride to skip recommendation and get AI response
             await onSend(pendingMessage, recommendation.recommended_model);
           }
           setRecommendation(null);
@@ -104,7 +104,7 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
         }}
         onCancel={async () => {
           if (pendingMessage) {
-            // Continue with current model - send message with current model
+            // Continue with current model - resend with modelOverride to skip recommendation
             await onSend(pendingMessage, selectedModel);
           }
           setRecommendation(null);
