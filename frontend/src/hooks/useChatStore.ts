@@ -142,7 +142,7 @@ export function useChatStore() {
   const [sessions, setSessions] = useState<ChatSession[]>(() => loadSessions());
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => loadCurrentSessionId());
   const [models, setModels] = useState<AIModel[]>(() => readCachedModels() || DEFAULT_MODELS);
-  const [selectedModel, setSelectedModel] = useState<string>('jupiterbrains');
+  const [selectedModel, setSelectedModel] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Save sessions whenever they change
@@ -154,6 +154,54 @@ export function useChatStore() {
   useEffect(() => {
     saveCurrentSessionId(currentSessionId);
   }, [currentSessionId]);
+
+  // Load chats from backend on mount
+  useEffect(() => {
+    const loadChatsFromBackend = async () => {
+      try {
+        const response = await fetch(API_ENDPOINTS.chat.list(1), {
+          method: 'GET',
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Loaded chats from backend:', data);
+
+          // Convert backend format to frontend ChatSession format
+          const backendChats: ChatSession[] = (Array.isArray(data) ? data : []).map((chat: any) => ({
+            id: chat.id,
+            title: chat.title || 'New Chat',
+            messages: [], // Messages will be loaded when chat is selected
+            createdAt: new Date(chat.created_at * 1000), // Convert Unix timestamp to Date
+            updatedAt: new Date(chat.updated_at * 1000),
+            model: 'jupiterbrains', // Default model
+          }));
+
+          // Merge with local sessions (backend takes priority)
+          const localSessions = loadSessions();
+          const mergedSessions = [...backendChats];
+
+          // Add local sessions that don't exist in backend
+          localSessions.forEach(local => {
+            if (!backendChats.find(b => b.id === local.id)) {
+              mergedSessions.push(local);
+            }
+          });
+
+          setSessions(mergedSessions);
+          console.log('Total chats loaded:', mergedSessions.length);
+        } else {
+          console.error('Failed to load chats from backend:', response.status);
+        }
+      } catch (error) {
+        console.error('Error loading chats:', error);
+        // Continue with local sessions
+      }
+    };
+
+    loadChatsFromBackend();
+  }, []); // Run once on mount
 
   const lastAuthFingerprintRef = useRef<string>('');
 
@@ -320,7 +368,6 @@ export function useChatStore() {
       setSessions([]);
       setCurrentSessionId(null);
       setModels(readCachedModels() || DEFAULT_MODELS);
-      setSelectedModel('jupiterbrains');
 
       modelsFetchStartedRef.current = false;
       modelsFetchInFlightRef.current = null;

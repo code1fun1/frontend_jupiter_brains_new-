@@ -1,9 +1,27 @@
-import { Plus, MessageSquare, Trash2, PanelLeftClose, Settings, X, LogOut, User } from 'lucide-react';
+import React from 'react';
+import { Plus, MessageSquare, Trash2, PanelLeftClose, Settings, X, LogOut, User, MoreVertical, Pin, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ChatSession } from '@/types/chat';
 import { cn } from '@/lib/utils';
 import jupiterBrainsLogo from '@/assets/jupiter-brains-logo.png';
+import { API_ENDPOINTS } from '@/utils/config';
 
 interface ChatSidebarProps {
   sessions: ChatSession[];
@@ -49,6 +67,120 @@ export function ChatSidebar({
     return s.updatedAt < yesterday;
   });
 
+  // State for delete confirmation dialog
+  const [chatToDelete, setChatToDelete] = React.useState<{ id: string, title: string } | null>(null);
+
+  // Cache to prevent repeated API calls on hover
+  const fetchedChatsRef = React.useRef<Set<string>>(new Set());
+
+  const handleChatHover = async (chatId: string) => {
+    // Skip if already fetched
+    if (fetchedChatsRef.current.has(chatId)) {
+      return;
+    }
+
+    try {
+      console.log('Fetching chat details for:', chatId);
+      const response = await fetch(API_ENDPOINTS.chat.get(chatId), {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Chat details from backend:', data);
+        // Mark as fetched
+        fetchedChatsRef.current.add(chatId);
+        // You can use this data to update the chat or show preview
+      } else {
+        console.error('Failed to fetch chat:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching chat on hover:', error);
+    }
+  };
+
+  const handlePinChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent chat selection
+    try {
+      console.log('Pinning chat:', chatId);
+      const response = await fetch(API_ENDPOINTS.chat.pin(chatId), {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Pin response:', data);
+        // You can update the chat's pinned status in state here
+      } else {
+        console.error('Failed to pin chat:', response.status);
+      }
+    } catch (error) {
+      console.error('Error pinning chat:', error);
+    }
+  };
+
+  const handleRenameChat = async (chatId: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newTitle = prompt('Enter new chat name:', currentTitle);
+    if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
+      try {
+        console.log('Renaming chat', chatId, 'to', newTitle);
+        const response = await fetch(API_ENDPOINTS.chat.rename(chatId), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            chat: {
+              title: newTitle.trim(),
+            },
+          }),
+        });
+
+        if (response.ok) {
+          console.log('Chat renamed successfully');
+          // Force re-fetch chats to update UI without reload
+          window.location.href = window.location.href;
+        } else {
+          console.error('Failed to rename chat:', response.status);
+          const errorData = await response.json();
+          console.error('Error details:', errorData);
+          alert('Failed to rename chat. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error renaming chat:', error);
+        alert('Error renaming chat. Please try again.');
+      }
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!chatToDelete) return;
+
+    try {
+      console.log('Deleting chat:', chatToDelete.id);
+      const response = await fetch(API_ENDPOINTS.chat.delete(chatToDelete.id), {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        console.log('Chat deleted successfully');
+        // Call the parent's delete handler to update UI
+        onDeleteSession(chatToDelete.id);
+      } else {
+        console.error('Failed to delete chat:', response.status);
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+    } finally {
+      setChatToDelete(null);
+    }
+  };
+
   const SessionGroup = ({
     title,
     items,
@@ -74,20 +206,46 @@ export function ChatSidebar({
                   : 'text-white hover:bg-accent/50'
               )}
               onClick={() => onSelectSession(session.id)}
+              onMouseEnter={() => handleChatHover(session.id)}
             >
               <MessageSquare className="h-4 w-4 flex-shrink-0 text-white/70" />
               <span className="flex-1 truncate text-sm">{session.title}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteSession(session.id);
-                }}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
+
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Three dots dropdown menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-white/70 hover:text-white hover:bg-white/10"
+                      onClick={(e) => e.stopPropagation()}
+                      title="More options"
+                    >
+                      <MoreVertical className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem
+                      onClick={(e) => handleRenameChat(session.id, session.title, e)}
+                      className="cursor-pointer"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setChatToDelete({ id: session.id, title: session.title });
+                      }}
+                      className="cursor-pointer text-red-600 focus:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           ))}
         </div>
@@ -111,7 +269,7 @@ export function ChatSidebar({
           'flex flex-col h-full bg-sidebar border-r border-sidebar-border transition-all duration-300 z-50',
           // Mobile: fixed overlay
           'fixed md:relative',
-          isOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0 md:w-0 overflow-hidden'
+          isOpen ? 'w-80 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0 md:w-0 overflow-hidden'
         )}
       >
         {/* Header */}
@@ -198,6 +356,26 @@ export function ChatSidebar({
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!chatToDelete} onOpenChange={() => setChatToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete {chatToDelete?.title || 'this chat'}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setChatToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

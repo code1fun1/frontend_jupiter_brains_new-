@@ -34,6 +34,11 @@ export const API_ENDPOINTS = {
     chat: {
         completions: () => `${getBackendBaseUrl()}/api/chat/completions`,
         create: () => `${getBackendBaseUrl()}/api/v1/chats/new`,
+        list: (page: number = 1) => `${getBackendBaseUrl()}/api/v1/chats/?page=${page}`,
+        get: (id: string) => `${getBackendBaseUrl()}/api/v1/chats/${id}`,
+        pin: (id: string) => `${getBackendBaseUrl()}/api/v1/chats/${id}/pinned`,
+        delete: (id: string) => `${getBackendBaseUrl()}/api/v1/chats/${id}`,
+        rename: (id: string) => `${getBackendBaseUrl()}/api/v1/chats/${id}`,
     },
     models: {
         list: () => `${getBackendBaseUrl()}/api/models?`,
