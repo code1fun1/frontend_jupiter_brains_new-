@@ -9,6 +9,15 @@
  * @returns The backend base URL without trailing slash
  */
 export const getBackendBaseUrl = (): string => {
+    // Check if using Vite proxy (relative paths)
+    const useProxy = (import.meta as any)?.env?.VITE_USE_VITE_PROXY === "true";
+    const proxyBackendUrl = (import.meta as any)?.env?.VITE_PROXY_BACKEND_URL;
+    
+    if (useProxy && proxyBackendUrl === "") {
+        // Using proxy - return empty string for relative paths
+        return "";
+    }
+    
     const raw = (import.meta as any)?.env?.VITE_BACKEND_BASE_URL;
     const base = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
 

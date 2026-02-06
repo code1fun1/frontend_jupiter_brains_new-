@@ -5,6 +5,7 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const useProxy = env.VITE_USE_VITE_PROXY === "true";
   const backendBaseUrl = env.VITE_BACKEND_BASE_URL;
 
   if (!backendBaseUrl) {
@@ -13,26 +14,39 @@ export default defineConfig(({ mode }) => {
 
   const cleanedBackendUrl = backendBaseUrl.replace(/\/$/, "");
 
+  // When using proxy, set backend URL to empty for relative paths
+  const proxyBackendUrl = useProxy ? "" : cleanedBackendUrl;
+
   return {
     server: {
       host: "::",
-      port: 8080,
+      port: 5173,
       hmr: {
         overlay: false,
       },
-      proxy: {
-        "/api": {
-          target: cleanedBackendUrl,
-          changeOrigin: true,
-          secure: false,
-        },
-      },
+      proxy: useProxy
+        ? {
+            "/api": {
+              target: cleanedBackendUrl,
+              changeOrigin: true,
+              secure: false,
+            },
+            "/openai": {
+              target: cleanedBackendUrl,
+              changeOrigin: true,
+              secure: false,
+            },
+          }
+        : undefined,
     },
     plugins: [react()].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+    },
+    define: {
+      "import.meta.env.VITE_PROXY_BACKEND_URL": JSON.stringify(proxyBackendUrl),
     },
   };
 });
