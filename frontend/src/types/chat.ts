@@ -24,15 +24,15 @@ export interface AIModel {
 
 export const DEFAULT_MODELS: AIModel[] = [
   {
-    id: 'jupiterbrains',
-    name: 'JupiterBrains (On Prem)',
-    description: 'Domain-aware SLM deployed on-premise',
+    id: 'groq.llama-3.1-8b-instant',
+    name: 'Llama 3.1 8B Instant',
+    description: 'Fast and efficient Llama model',
     enabled: true,
   },
   {
-    id: 'chatgpt',
-    name: 'ChatGPT',
-    description: 'OpenAI GPT-4 model',
+    id: 'jupiterbrains',
+    name: 'JupiterBrains (On Prem)',
+    description: 'Domain-aware SLM deployed on-premise',
     enabled: true,
   },
   {
@@ -45,12 +45,6 @@ export const DEFAULT_MODELS: AIModel[] = [
     id: 'gemini',
     name: 'Gemini',
     description: 'Google Gemini model',
-    enabled: true,
-  },
-  {
-    id: 'random',
-    name: 'Random',
-    description: 'Randomly select a model',
     enabled: true,
   },
 ];

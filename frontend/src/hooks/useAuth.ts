@@ -211,50 +211,45 @@ export function useAuth() {
       const apiKeyHeader = SIGNUP_API_KEY ? { [SIGNUP_API_KEY_HEADER]: SIGNUP_API_KEY } : {};
       const authHeader = { ...bearerHeader, ...apiKeyHeader };
 
-      let jsonRes: Response;
-      let jsonData: any = null;
+      let res: Response;
+      let data: any = null;
 
       try {
-        console.log('Attempting signin to:', signInUrl);
-        jsonRes = await fetch(signInUrl, {
+        const initialRes = await fetch(signInUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeader },
           credentials: 'include',
           body: JSON.stringify({ email, password }),
         });
-        jsonData = await jsonRes.json().catch(() => null);
-      } catch (fetchError: any) {
-        console.error('Signin fetch error:', fetchError);
-        if (fetchError.message?.includes('Failed to fetch') || fetchError.name === 'TypeError') {
-          return {
-            error: {
-              message: 'Cannot connect to backend at http://localhost:8081. Please ensure: 1) Backend is running, 2) CORS is configured to allow http://localhost:5173'
-            }
-          };
+
+        const initialData = await initialRes.json().catch(() => null);
+
+        const is422MissingBody =
+          initialRes.status === 422 &&
+          Array.isArray(initialData?.detail) &&
+          initialData.detail.some((d: any) =>
+            Array.isArray(d?.loc) && d.loc.includes('body') && d.type === 'missing'
+          );
+
+        if (is422MissingBody) {
+          res = await fetch(signInUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...authHeader },
+            credentials: 'include',
+            body: new URLSearchParams({ email, password }).toString(),
+          });
+          data = await res.json().catch(() => null);
+        } else {
+          res = initialRes;
+          data = initialData;
         }
-        throw fetchError;
+      } catch (err: any) {
+        console.error('Signin fetch error:', err);
+        return { error: { message: 'Connection failed. Please check backend and CORS settings.' } };
       }
 
-      const missingBody422 =
-        jsonRes.status === 422 &&
-        Array.isArray(jsonData?.detail) &&
-        jsonData.detail.some((d: any) => Array.isArray(d?.loc) && d.loc.join('.') === 'body' && d.type === 'missing');
-
-      const res = missingBody422
-        ? await fetch(signInUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', ...authHeader },
-          credentials: 'include',
-          body: new URLSearchParams({ email, password }).toString(),
-        })
-        : jsonRes;
-
-      const data = missingBody422 ? await res.json().catch(() => null) : jsonData;
-
       if (!res.ok) {
-        const detail = typeof data?.detail === 'string' ? data.detail : null;
-        const message = detail || `Login failed (HTTP ${res.status})`;
-        console.error('Signin failed:', message);
+        const message = data?.detail || `Login failed (${res.status})`;
         return { error: { message } };
       }
 

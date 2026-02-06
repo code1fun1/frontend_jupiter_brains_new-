@@ -142,7 +142,11 @@ export function useChatStore() {
   const [sessions, setSessions] = useState<ChatSession[]>(() => loadSessions());
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => loadCurrentSessionId());
   const [models, setModels] = useState<AIModel[]>(() => readCachedModels() || DEFAULT_MODELS);
-  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    const initialModels = readCachedModels() || DEFAULT_MODELS;
+    const enabled = initialModels.filter(m => m.enabled);
+    return (enabled.length > 0 ? enabled[0] : initialModels[0]).id;
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   // Save sessions whenever they change
@@ -183,11 +187,14 @@ export function useChatStore() {
           // Find matching local session
           const localSession = localSessions.find(local => local.id === backendChat.id);
 
-          // If local session exists and has messages, use those messages
-          if (localSession && localSession.messages.length > 0) {
+          // If local session exists, preserve messages and potentially the title
+          if (localSession) {
             return {
               ...backendChat,
-              messages: localSession.messages, // Preserve local messages
+              messages: localSession.messages.length > 0 ? localSession.messages : backendChat.messages,
+              title: (backendChat.title === 'New Chat' && localSession.title !== 'New Chat')
+                ? localSession.title
+                : backendChat.title,
             };
           }
 
@@ -239,8 +246,9 @@ export function useChatStore() {
         return;
       }
 
-      // If session has no messages, load from backend
-      if (session.messages.length === 0) {
+      // If session has no messages and is a backend ID (not a local temp ID), load from backend
+      // Local IDs are short (random string), Backend IDs are usually UUIDs (36 chars)
+      if (session.messages.length === 0 && currentSessionId.length > 20) {
         try {
           console.log('Loading messages for current chat:', currentSessionId);
           const response = await fetch(API_ENDPOINTS.chat.get(currentSessionId), {
@@ -505,9 +513,9 @@ export function useChatStore() {
   const selectSession = useCallback(async (sessionId: string) => {
     setCurrentSessionId(sessionId);
 
-    // Load messages from backend if session has no messages
+    // Load messages from backend if session has no messages and is a backend ID
     const session = sessions.find(s => s.id === sessionId);
-    if (session && session.messages.length === 0) {
+    if (session && session.messages.length === 0 && sessionId.length > 20) {
       try {
         console.log('Loading messages for chat:', sessionId);
         const response = await fetch(API_ENDPOINTS.chat.get(sessionId), {
@@ -572,7 +580,7 @@ export function useChatStore() {
         const createPayload = {
           chat: {
             id: "",
-            title: "New Chat",
+            title: generateTitle(content),
             models: [modelOverride || selectedModel],
             params: {},
             messages: [{
@@ -609,11 +617,12 @@ export function useChatStore() {
             const oldSessionId = session.id;
 
             // Update session object
-            session = { ...session, id: backendId };
+            const newTitle = generateTitle(content);
+            session = { ...session, id: backendId, title: newTitle };
 
             // Update in sessions array
             setSessions((prev) =>
-              prev.map((s) => (s.id === oldSessionId ? { ...s, id: backendId } : s))
+              prev.map((s) => (s.id === oldSessionId ? { ...s, id: backendId, title: newTitle } : s))
             );
 
             // Update current session ID
@@ -705,7 +714,27 @@ export function useChatStore() {
 
       if (!res.ok) {
         const detail = typeof (data as any)?.detail === 'string' ? (data as any).detail : null;
-        throw new Error(detail || `Chat request failed (HTTP ${res.status})`);
+        const errorMsg = detail || `Chat request failed (HTTP ${res.status})`;
+
+        // Handle "model not found" or 400 errors by triggering a model selection dialog
+        if (res.status === 400 || (errorMsg.toLowerCase().includes('model') && errorMsg.toLowerCase().includes('not found'))) {
+          console.warn('Model error detected, triggering selection dialog:', errorMsg);
+          return {
+            isRecommendation: true,
+            recommendation: {
+              type: 'model_recommendation',
+              reason: detail || 'The selected model is not available. Please choose a working model from the list below.',
+              recommended_model: models.find(m => m.enabled)?.id || models[0]?.id || '',
+              alternatives: models.map(m => ({
+                id: m.id,
+                name: m.name,
+                recommended_for: m.description
+              }))
+            }
+          };
+        }
+
+        throw new Error(errorMsg);
       }
 
       const d: any = data as any;
@@ -840,6 +869,7 @@ export function useChatStore() {
 
             const chatUpdatePayload = {
               chat: {
+                title: session!.title,
                 models: [modelToUse],
                 history: {
                   messages: messagesObject,
