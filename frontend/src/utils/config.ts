@@ -52,6 +52,8 @@ export const API_ENDPOINTS = {
     },
     models: {
         list: () => `${getBackendBaseUrl()}/api/models?`,
+        create: () => `${getBackendBaseUrl()}/api/v1/models/create`,
+        base: () => `${getBackendBaseUrl()}/api/v1/models/base`,
     },
     openai: {
         config: () => `${getBackendBaseUrl()}/openai/config`,

@@ -20,6 +20,7 @@ export interface AIModel {
   description: string;
   enabled: boolean;
   icon?: string;
+  rawData?: any;
 }
 
 export const DEFAULT_MODELS: AIModel[] = [

@@ -394,7 +394,8 @@ export function useChatStore() {
                 id: m,
                 name: m,
                 description: 'Model',
-                enabled: true,
+                enabled: false,
+                rawData: null,
               };
             }
 
@@ -404,7 +405,8 @@ export function useChatStore() {
               id,
               name: String(m?.name ?? id),
               description: String(m?.description ?? m?.desc ?? 'Model'),
-              enabled: typeof m?.enabled === 'boolean' ? m.enabled : true,
+              enabled: false,
+              rawData: m,
             };
           })
           .filter(Boolean) as AIModel[];
