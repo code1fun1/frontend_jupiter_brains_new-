@@ -12,12 +12,12 @@ export const getBackendBaseUrl = (): string => {
     // Check if using Vite proxy (relative paths)
     const useProxy = (import.meta as any)?.env?.VITE_USE_VITE_PROXY === "true";
     const proxyBackendUrl = (import.meta as any)?.env?.VITE_PROXY_BACKEND_URL;
-    
+
     if (useProxy && proxyBackendUrl === "") {
         // Using proxy - return empty string for relative paths
         return "";
     }
-    
+
     const raw = (import.meta as any)?.env?.VITE_BACKEND_BASE_URL;
     const base = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : '';
 
@@ -38,7 +38,7 @@ export const API_ENDPOINTS = {
     auth: {
         signIn: () => `${getBackendBaseUrl()}/api/v1/auths/signin`,
         signOut: () => `${getBackendBaseUrl()}/api/v1/auths/signout`,
-        signUp: () => `${getBackendBaseUrl()}/api/v1/auths/add`,
+        signUp: () => `${getBackendBaseUrl()}/api/v1/auths/signup`,
     },
     chat: {
         completions: () => `${getBackendBaseUrl()}/api/chat/completions`,

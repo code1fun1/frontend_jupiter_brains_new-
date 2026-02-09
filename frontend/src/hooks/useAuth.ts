@@ -151,13 +151,8 @@ export function useAuth() {
 
         data = await res.json().catch(() => null);
       }
-    } catch (err: any) {
-      console.error('Signin fetch error:', err);
-      return {
-        error: {
-          message: 'Cannot connect to backend at http://localhost:8081. Please ensure: 1) Backend is running, 2) CORS is configured to allow http://localhost:5173'
-        }
-      };
+    } catch {
+      return { error: { message: 'Backend not reachable' } };
     }
 
     if (!res.ok) {
@@ -184,9 +179,50 @@ export function useAuth() {
     return { error: null };
   };
 
+  const signUp = async (email: string, password: string, name?: string) => {
+    const signUpUrl = API_ENDPOINTS.auth.signUp();
+
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+
+    if (SIGNUP_BEARER_TOKEN) {
+      headers.Authorization = SIGNUP_BEARER_TOKEN.startsWith('Bearer ')
+        ? SIGNUP_BEARER_TOKEN
+        : `Bearer ${SIGNUP_BEARER_TOKEN}`;
+    }
+
+    if (SIGNUP_API_KEY) {
+      headers[SIGNUP_API_KEY_HEADER] = SIGNUP_API_KEY;
+    }
+
+    try {
+      const res = await fetch(signUpUrl, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ email, password, name }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        return { error: { message: data?.detail || 'Sign up failed' } };
+      }
+
+      // Automatically sign in after sign up
+      return await signIn(email, password);
+    } catch (err: any) {
+      console.error('Signup fetch error:', err);
+      return { error: { message: 'Signup failed. Please try again later.' } };
+    }
+  };
+
   return {
     ...authState,
     signIn,
+    signUp,
     signOut,
     signInWithGoogle: async () => ({ error: { message: 'Disabled' } }),
     signInWithGithub: async () => ({ error: { message: 'Disabled' } }),
