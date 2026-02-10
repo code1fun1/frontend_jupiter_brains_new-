@@ -521,15 +521,18 @@ export function useChatStore() {
       const isLoggedOut = !String(emailPart || '').trim() && !String(tokenPart || '').trim();
       setSessions([]);
       setCurrentSessionId(null);
-      setModels(readCachedModels() || DEFAULT_MODELS);
 
       modelsFetchStartedRef.current = false;
       modelsFetchInFlightRef.current = null;
 
       if (!isLoggedOut) {
+        // Refresh models to get fresh enriched data after login
         refreshModels().catch(() => {
           // ignore
         });
+      } else {
+        // On logout, set to cached or default models
+        setModels(readCachedModels() || DEFAULT_MODELS);
       }
     };
 
