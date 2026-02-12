@@ -8,7 +8,7 @@ import { ModelSuggestionDialog } from './ModelSuggestionDialog';
 
 interface ChatAreaProps {
   messages: Message[];
-  onSend: (message: string, modelOverride?: string, slmEnabled?: boolean, slmDecision?: 'accept' | 'reject' | null) => Promise<any>;
+  onSend: (message: string, modelOverride?: string, slmEnabled?: boolean, slmDecision?: 'accept' | 'reject' | null, imageGeneration?: boolean) => Promise<any>;
   isLoading: boolean;
   selectedModelName: string;
   selectedModel: string;
@@ -57,7 +57,7 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
             </div>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-5xl mx-auto">
             {messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
@@ -80,8 +80,8 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
         )}
       </div>
 
-      {/* Input Area */}
-      <div className="flex-shrink-0 p-4 pb-6">
+      {/* Input Area - Full width at bottom */}
+      <div className="flex-shrink-0 border-t border-border py-3">
         <ChatInput
           onSend={handleSend}
           isLoading={isLoading}
@@ -98,13 +98,15 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
         }}
         onConfirm={async (modelId: string) => {
           if (recommendation && pendingMessage) {
+            // Close dialog immediately
+            setRecommendation(null);
+            setPendingMessage(null);
+
             // Switch to selected model
             onChangeModel(modelId);
             // Resend with recommended model - slm_decision is "accept"
             await onSend(pendingMessage, modelId, showRecommendationPopup, 'accept');
           }
-          setRecommendation(null);
-          setPendingMessage(null);
         }}
         onCancel={async () => {
           if (pendingMessage) {
@@ -121,11 +123,11 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
     </div>
   );
 
-  async function handleSend(message: string) {
+  async function handleSend(message: string, imageGeneration?: boolean) {
     setPendingMessage(message);
-    console.log('ChatArea: Sending message with slmEnabled =', showRecommendationPopup);
+    console.log('ChatArea: Sending message with slmEnabled =', showRecommendationPopup, 'imageGeneration =', imageGeneration);
     // Initial send - slm_decision is null
-    const result = await onSend(message, undefined, showRecommendationPopup, null);
+    const result = await onSend(message, undefined, showRecommendationPopup, null, imageGeneration);
     console.log('ChatArea: Result from onSend =', result);
 
     // Check if result contains model recommendation
@@ -144,7 +146,7 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
         if (recommendedModel) {
           onChangeModel(recommendedModel);
           // Resend with recommended model - slm_decision is "accept"
-          await onSend(message, recommendedModel, showRecommendationPopup, 'accept');
+          await onSend(message, recommendedModel, showRecommendationPopup, 'accept', imageGeneration);
         }
         setPendingMessage(null);
       }

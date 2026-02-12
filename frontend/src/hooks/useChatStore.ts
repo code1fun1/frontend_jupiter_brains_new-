@@ -622,7 +622,8 @@ export function useChatStore() {
     content: string,
     modelOverride?: string,
     slmEnabled: boolean = true,
-    slmDecision: 'accept' | 'reject' | null = null
+    slmDecision: 'accept' | 'reject' | null = null,
+    imageGeneration: boolean = false
   ) => {
     let session = currentSession;
 
@@ -765,6 +766,12 @@ export function useChatStore() {
           messages: history,
           session_id: session?.id,
           stream: false,
+          features: {
+            voice: false,
+            image_generation: imageGeneration,
+            code_interpreter: false,
+            web_search: false,
+          },
           metadata: {
             slm_enabled: slmEnabled,
             slm_decision: slmDecision,

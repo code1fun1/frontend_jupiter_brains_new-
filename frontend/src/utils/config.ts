@@ -60,6 +60,11 @@ export const API_ENDPOINTS = {
         config: () => `${getBackendBaseUrl()}/openai/config`,
         updateConfig: () => `${getBackendBaseUrl()}/openai/config/update`,
     },
+    images: {
+        updateConfig: () => `${getBackendBaseUrl()}/api/v1/images/config/update`,
+        config: () => `${getBackendBaseUrl()}/api/config`,
+        models: () => `${getBackendBaseUrl()}/api/v1/images/models`,
+    },
 } as const;
 
 /**
