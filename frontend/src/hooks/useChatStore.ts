@@ -773,10 +773,14 @@ export function useChatStore() {
       // Use modelOverride if provided, otherwise use selectedModel
       const modelToUse = modelOverride || selectedModel;
 
+      // Generate a unique session ID for this chat session (persists for the session)
+      const sessionId = generateId() + '-' + Date.now().toString(36);
+
       const completionPayload = {
         model: modelToUse,
         messages: history,
-        chat_id: session?.id,  // Changed from session_id to chat_id
+        chat_id: session?.id,  // Backend chat ID
+        session_id: sessionId,  // WebSocket/session ID (separate from chat_id)
         stream: false,
         features: {
           voice: false,
@@ -794,6 +798,7 @@ export function useChatStore() {
 
       console.log('Completion API payload:', completionPayload);
       console.log('Completion API chat_id:', completionPayload.chat_id);
+      console.log('Completion API session_id:', completionPayload.session_id);
 
       const res = await fetch(chatUrl, {
         method: 'POST',
