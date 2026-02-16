@@ -378,9 +378,9 @@ export function ModelConfiguration({
       const payload = {
         ENABLE_IMAGE_GENERATION: true,
         ENABLE_IMAGE_PROMPT_GENERATION: true,
-        IMAGE_GENERATION_ENGINE: config.imageGenerationEngine || 'openai',
-        IMAGE_GENERATION_MODEL: config.model || '',
-        IMAGE_SIZE: config.imageSize || '',
+        IMAGE_GENERATION_ENGINE: (config.imageGenerationEngine || 'openai').toLowerCase(),
+        IMAGE_GENERATION_MODEL: (config.model || '').toLowerCase(),
+        IMAGE_SIZE: (config.imageSize || '').toLowerCase(),
         IMAGE_STEPS: 50,
         IMAGES_OPENAI_API_BASE_URL: config.openAIBaseUrl || '',
         IMAGES_OPENAI_API_KEY: config.openAIKey || '',

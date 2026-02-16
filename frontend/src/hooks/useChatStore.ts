@@ -1,8 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Message, ChatSession, AIModel, DEFAULT_MODELS } from '@/types/chat';
+import { Message, ChatSession, AIModel, DEFAULT_MODELS, FileItem } from '@/types/chat';
 import { getBackendBaseUrl, API_ENDPOINTS } from '@/utils/config';
 
-const generateId = () => Math.random().toString(36).substring(2, 15);
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers or environments without crypto.randomUUID
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 const STATIC_AUTH_SESSION_KEY = 'jb_static_auth_session';
 
@@ -780,6 +789,7 @@ export function useChatStore() {
         model: modelToUse,
         messages: history,
         chat_id: session?.id,  // Backend chat ID
+        id: userMessage.id,    // Message ID (specific to this message)
         session_id: sessionId,  // WebSocket/session ID (separate from chat_id)
         stream: false,
         features: {
@@ -798,6 +808,7 @@ export function useChatStore() {
 
       console.log('Completion API payload:', completionPayload);
       console.log('Completion API chat_id:', completionPayload.chat_id);
+      console.log('Completion API id:', completionPayload.id);
       console.log('Completion API session_id:', completionPayload.session_id);
 
       const res = await fetch(chatUrl, {
@@ -888,11 +899,38 @@ export function useChatStore() {
                       ? payload.choices[0].text
                       : '';
 
+      // Extract files/images from response
+      const files: FileItem[] = [];
+
+      // Check for files array in response
+      if (payload?.files && Array.isArray(payload.files)) {
+        files.push(...payload.files.map((f: any) => ({
+          type: f.type || 'file',
+          url: f.url || f,
+          name: f.name,
+          content_type: f.content_type,
+          size: f.size
+        })));
+      }
+
+      // Check for images array (alternative format)
+      if (payload?.images && Array.isArray(payload.images)) {
+        files.push(...payload.images.map((img: any) => ({
+          type: 'image' as const,
+          url: typeof img === 'string' ? img : img.url,
+          name: typeof img === 'object' ? img.name : undefined,
+          content_type: typeof img === 'object' ? img.content_type : 'image/png'
+        })));
+      }
+
+      console.log('Extracted files from response:', files);
+
       const assistantMessage: Message = {
         id: generateId(),
         role: 'assistant',
         content: aiText || 'No response',
         timestamp: new Date(),
+        ...(files.length > 0 ? { files } : {})
       };
 
       setSessions((prev) =>

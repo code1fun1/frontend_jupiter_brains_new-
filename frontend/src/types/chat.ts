@@ -1,8 +1,17 @@
+export interface FileItem {
+  type: 'image' | 'file';
+  url: string;
+  name?: string;
+  content_type?: string;
+  size?: number;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  files?: FileItem[];
 }
 
 export interface ChatSession {

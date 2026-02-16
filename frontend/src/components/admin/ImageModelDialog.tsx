@@ -112,7 +112,7 @@ export function ImageModelDialog({ isOpen, onClose, onSave }: ImageModelDialogPr
                                     <SelectValue placeholder="Select engine" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-zinc-900 border-white/10">
-                                    <SelectItem value="OpenAI">OpenAI</SelectItem>
+                                    <SelectItem value="openai">OpenAI</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
