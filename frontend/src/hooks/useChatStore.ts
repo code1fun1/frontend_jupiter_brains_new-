@@ -268,6 +268,7 @@ export function useChatStore() {
                 role: msg.role,
                 content: msg.content,
                 timestamp: new Date(msg.timestamp || msg.created_at * 1000),
+                files: Array.isArray(msg.files) && msg.files.length > 0 ? msg.files : undefined,
               }));
 
               console.log('Setting messages:', backendMessages.length);
@@ -595,6 +596,7 @@ export function useChatStore() {
               role: msg.role,
               content: msg.content,
               timestamp: new Date(msg.timestamp || msg.created_at * 1000),
+              files: Array.isArray(msg.files) && msg.files.length > 0 ? msg.files : undefined,
             }));
 
             setSessions(prev => prev.map(s =>
@@ -891,11 +893,32 @@ export function useChatStore() {
                       ? payload.choices[0].text
                       : '';
 
+      // Extract files (e.g. AI-generated images) from the response
+      const aiFiles: Array<{ url: string; name?: string; type?: string }> =
+        Array.isArray(payload?.files)
+          ? payload.files
+          : Array.isArray(d?.files)
+            ? d.files
+            : [];
+
+      // Resolve relative URLs (e.g. /api/v1/files/.../content) to full backend URLs
+      const backendBase = getBackendBaseUrl(); // e.g. "http://localhost:8080"
+      const validFiles = aiFiles
+        .filter((f) => typeof f?.url === 'string' && f.url.trim() !== '')
+        .map((f) => ({
+          ...f,
+          url: f.url.startsWith('http://') || f.url.startsWith('https://')
+            ? f.url
+            : `${backendBase}${f.url.startsWith('/') ? '' : '/'}${f.url}`,
+        }));
+      console.log('useChatStore: resolved files =', validFiles);
+
       const assistantMessage: Message = {
         id: generateId(),
         role: 'assistant',
-        content: aiText || 'No response',
+        content: aiText || (validFiles.length > 0 ? '' : 'No response'),
         timestamp: new Date(),
+        files: validFiles.length > 0 ? validFiles : undefined,
       };
 
       setSessions((prev) =>

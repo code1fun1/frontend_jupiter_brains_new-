@@ -1,8 +1,15 @@
+export interface MessageFile {
+  url: string;
+  name?: string;
+  type?: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  files?: MessageFile[];
 }
 
 export interface ChatSession {

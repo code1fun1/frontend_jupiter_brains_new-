@@ -1,4 +1,4 @@
-import { User, Bot } from 'lucide-react';
+import { User } from 'lucide-react';
 import { Message } from '@/types/chat';
 import { cn } from '@/lib/utils';
 import JupiterBrainsLogo from '@/components/icons/JupiterBrainsLogo';
@@ -9,6 +9,7 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const hasFiles = message.files && message.files.length > 0;
 
   // Simple markdown parsing for basic formatting
   const parseMarkdown = (text: string) => {
@@ -54,9 +55,54 @@ export function ChatMessage({ message }: ChatMessageProps) {
         <div className="font-semibold text-sm">
           {isUser ? 'You' : 'JupiterBrains'}
         </div>
-        <div className="prose prose-invert prose-sm max-w-none text-foreground leading-relaxed">
-          {parseMarkdown(message.content)}
-        </div>
+
+        {/* Text content — hidden when images are present */}
+        {message.content && !hasFiles && (
+          <div className="prose prose-invert prose-sm max-w-none text-foreground leading-relaxed">
+            {parseMarkdown(message.content)}
+          </div>
+        )}
+
+        {/* Generated images */}
+        {hasFiles && (
+          <div className="mt-3 flex flex-wrap gap-3">
+            {message.files!.map((file, i) => (
+              <a
+                key={i}
+                href={file.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block group"
+                title="Click to open full size"
+              >
+                <div className="relative overflow-hidden rounded-xl border border-border shadow-lg group-hover:shadow-xl transition-shadow duration-200">
+                  <img
+                    src={file.url}
+                    alt={file.name || `Generated image ${i + 1}`}
+                    loading="lazy"
+                    className="max-w-sm w-full object-cover rounded-xl group-hover:opacity-90 transition-opacity duration-200"
+                    onError={(e) => {
+                      const el = e.target as HTMLImageElement;
+                      el.style.display = 'none';
+                    }}
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <p className="text-white text-xs truncate">
+                      {file.name || 'Generated image'} · Open full size ↗
+                    </p>
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
+
+        {/* Fallback label if no text and no files at all */}
+        {!message.content && !hasFiles && (
+          <div className="prose prose-invert prose-sm max-w-none text-foreground leading-relaxed">
+            <span>No response</span>
+          </div>
+        )}
       </div>
     </div>
   );
