@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Message, ChatSession, AIModel, DEFAULT_MODELS } from '@/types/chat';
 import { getBackendBaseUrl, API_ENDPOINTS } from '@/utils/config';
+import { v4 as uuidv4 } from "uuid";
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -775,10 +776,12 @@ export function useChatStore() {
 
       // Generate a unique session ID for this chat session (persists for the session)
       const sessionId = generateId() + '-' + Date.now().toString(36);
+      const messageId = uuidv4();
 
       const completionPayload = {
         model: modelToUse,
         messages: history,
+        id: messageId,
         chat_id: session?.id,  // Backend chat ID
         session_id: sessionId,  // WebSocket/session ID (separate from chat_id)
         stream: false,
