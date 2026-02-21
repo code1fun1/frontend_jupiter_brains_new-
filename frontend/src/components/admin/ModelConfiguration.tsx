@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, GripVertical, Settings2, ExternalLink, Pencil, Image } from 'lucide-react';
+import { Trash2, GripVertical, Settings2, ExternalLink, Pencil, Image, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { AIModel } from '@/types/chat';
@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ImageModelDialog, ImageModelConfig } from './ImageModelDialog';
+import { VideoModelDialog, VideoModelConfig } from './VideoModelDialog';
 
 interface ModelConfigurationProps {
   models: AIModel[];
@@ -36,8 +37,12 @@ export function ModelConfiguration({
   const [openAIBaseUrlsText, setOpenAIBaseUrlsText] = useState('');
   const [openAIKeysText, setOpenAIKeysText] = useState('');
   const [openAIConfigsJson, setOpenAIConfigsJson] = useState('{\n  \n}');
+  const [openAIModelId, setOpenAIModelId] = useState('');
+  const [openAIModelIds, setOpenAIModelIds] = useState<string[]>([]);
+  const [isAddingModelId, setIsAddingModelId] = useState(false);
   const [isSavingOpenAIConfig, setIsSavingOpenAIConfig] = useState(false);
   const [isImageModelDialogOpen, setIsImageModelDialogOpen] = useState(false);
+  const [isVideoModelDialogOpen, setIsVideoModelDialogOpen] = useState(false);
 
   const getOverviewStorageKey = () => {
     try {
@@ -159,6 +164,85 @@ export function ModelConfiguration({
       .filter(Boolean);
   };
 
+  const handleAddModelId = async () => {
+    const trimmed = openAIModelId.trim();
+    if (!trimmed) return;
+
+    const updatedIds = [...openAIModelIds, trimmed];
+
+    setIsAddingModelId(true);
+    try {
+      const bearerHeader = getStoredAuthHeader();
+      const payload = {
+        ENABLE_OPENAI_API: enableOpenAI,
+        OPENAI_API_BASE_URLS: parseList(openAIBaseUrlsText),
+        OPENAI_API_KEYS: parseList(openAIKeysText),
+        OPENAI_API_CONFIGS: {
+          '0': {
+            enable: true,
+            tags: [],
+            prefix_id: '',
+            model_ids: updatedIds,
+            connection_type: 'external',
+            auth_type: 'bearer',
+          },
+        },
+      };
+
+      const res = await fetch(API_ENDPOINTS.openai.updateConfig(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...bearerHeader },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.detail || `HTTP ${res.status}`);
+      }
+
+      setOpenAIModelIds(updatedIds);
+      setOpenAIModelId('');
+      toast.success(`Model ID "${trimmed}" added!`);
+    } catch (e: any) {
+      toast.error(`Failed to add model ID: ${e?.message || 'Unknown error'}`);
+    } finally {
+      setIsAddingModelId(false);
+    }
+  };
+
+  const handleRemoveModelId = async (idToRemove: string) => {
+    const updatedIds = openAIModelIds.filter((id) => id !== idToRemove);
+    try {
+      const bearerHeader = getStoredAuthHeader();
+      const payload = {
+        ENABLE_OPENAI_API: enableOpenAI,
+        OPENAI_API_BASE_URLS: parseList(openAIBaseUrlsText),
+        OPENAI_API_KEYS: parseList(openAIKeysText),
+        OPENAI_API_CONFIGS: {
+          '0': {
+            enable: true,
+            tags: [],
+            prefix_id: '',
+            model_ids: updatedIds,
+            connection_type: 'external',
+            auth_type: 'bearer',
+          },
+        },
+      };
+      await fetch(API_ENDPOINTS.openai.updateConfig(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...bearerHeader },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      setOpenAIModelIds(updatedIds);
+      toast.success(`Model ID removed`);
+    } catch {
+      toast.error('Failed to remove model ID');
+    }
+  };
+
   const handleSaveOpenAIConfig = async () => {
     let configs: any = {};
     try {
@@ -169,11 +253,27 @@ export function ModelConfiguration({
       return;
     }
 
+    // If model IDs were added via the + button, use the structured format.
+    // Otherwise fall back to the JSON textarea value.
+    const openAIConfigs = openAIModelIds.length > 0
+      ? {
+        '0': {
+          enable: true,
+          tags: [],
+          prefix_id: '',
+          model_ids: openAIModelIds,
+          connection_type: 'external',
+          auth_type: 'bearer',
+        },
+      }
+      : (configs && typeof configs === 'object' ? configs : {});
+
     const payload = {
       ENABLE_OPENAI_API: enableOpenAI,
       OPENAI_API_BASE_URLS: parseList(openAIBaseUrlsText),
       OPENAI_API_KEYS: parseList(openAIKeysText),
-      OPENAI_API_CONFIGS: configs && typeof configs === 'object' ? configs : {},
+      OPENAI_API_CONFIGS: openAIConfigs,
+      OPENAI_API_MODEL: openAIModelId.trim() || undefined,
     };
 
     setIsSavingOpenAIConfig(true);
@@ -457,6 +557,11 @@ export function ModelConfiguration({
     }
   };
 
+  const handleSaveVideoConfig = (config: VideoModelConfig) => {
+    // No API connection yet — config is saved locally for future use
+    console.log('[VideoModelDialog] Config saved (no API wired yet):', config);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -550,6 +655,51 @@ export function ModelConfiguration({
                 </div>
 
                 <div className="space-y-2">
+                  <Label className="text-zinc-400 text-xs uppercase tracking-wider ml-1">Model IDs</Label>
+
+                  {/* Existing model IDs list */}
+                  {openAIModelIds.length > 0 && (
+                    <div className="space-y-1.5">
+                      {openAIModelIds.map((id) => (
+                        <div key={id} className="flex items-center justify-between gap-2 px-3 py-2 bg-black/40 border border-white/5 rounded-md">
+                          <span className="text-sm text-zinc-200 font-mono truncate flex-1">{id}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveModelId(id)}
+                            className="text-zinc-500 hover:text-red-400 transition-colors text-lg leading-none flex-shrink-0"
+                            title="Remove"
+                          >
+                            −
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add model ID row */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="openai-model-id"
+                      type="text"
+                      placeholder="Add a model ID"
+                      value={openAIModelId}
+                      onChange={(e) => setOpenAIModelId(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddModelId(); } }}
+                      className="flex-1 rounded-md px-3 py-2 text-sm bg-black/50 border border-white/5 text-white placeholder:text-zinc-500 focus:outline-none focus:border-purple-500/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddModelId}
+                      disabled={isAddingModelId || !openAIModelId.trim()}
+                      title="Add model ID"
+                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full border border-white/10 text-zinc-400 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-lg"
+                    >
+                      {isAddingModelId ? '…' : '+'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="openai-configs" className="text-zinc-400 text-xs uppercase tracking-wider ml-1">Advanced Config (JSON)</Label>
                   <Textarea
                     id="openai-configs"
@@ -577,6 +727,14 @@ export function ModelConfiguration({
           >
             <Image className="h-4 w-4" />
             Enable Image Models
+          </Button>
+
+          <Button
+            onClick={() => setIsVideoModelDialogOpen(true)}
+            className="bg-violet-600 text-white hover:bg-violet-500 transition-all font-semibold gap-2 shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+          >
+            <Video className="h-4 w-4" />
+            Enable Video Models
           </Button>
         </div>
       </div>
@@ -633,6 +791,13 @@ export function ModelConfiguration({
         isOpen={isImageModelDialogOpen}
         onClose={() => setIsImageModelDialogOpen(false)}
         onSave={handleSaveImageConfig}
+      />
+
+      {/* Video Model Configuration Dialog */}
+      <VideoModelDialog
+        isOpen={isVideoModelDialogOpen}
+        onClose={() => setIsVideoModelDialogOpen(false)}
+        onSave={handleSaveVideoConfig}
       />
     </div>
   );

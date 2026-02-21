@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Plus, Image as ImageIcon } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { IntegrationPopup } from './IntegrationPopup';
 
 interface ChatInputProps {
-  onSend: (message: string, imageGeneration?: boolean) => void;
+  onSend: (message: string, imageGeneration?: boolean, videoGeneration?: boolean) => void;
   isLoading: boolean;
   disabled?: boolean;
 }
@@ -14,6 +14,7 @@ export function ChatInput({ onSend, isLoading, disabled }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [imageGenerationEnabled, setImageGenerationEnabled] = useState(false);
+  const [videoGenerationEnabled, setVideoGenerationEnabled] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -26,7 +27,7 @@ export function ChatInput({ onSend, isLoading, disabled }: ChatInputProps) {
   const handleSubmit = () => {
     if (value.trim() && !isLoading && !disabled) {
       const message = value.trim();
-      onSend(message, imageGenerationEnabled);
+      onSend(message, imageGenerationEnabled, videoGenerationEnabled);
       setValue('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -43,13 +44,21 @@ export function ChatInput({ onSend, isLoading, disabled }: ChatInputProps) {
 
   return (
     <div className="w-full">
-      {/* Indicator when image generation is enabled */}
-      {imageGenerationEnabled && (
+      {/* Active mode badges */}
+      {(imageGenerationEnabled || videoGenerationEnabled) && (
         <div className="flex items-center gap-2 px-4 pb-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-xs font-medium text-primary">
-            <ImageIcon className="h-3 w-3" />
-            <span>Image Generation</span>
-          </div>
+          {imageGenerationEnabled && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-xs font-medium text-primary">
+              <ImageIcon className="h-3 w-3" />
+              <span>Image Generation</span>
+            </div>
+          )}
+          {videoGenerationEnabled && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/10 border border-violet-500/20 rounded-lg text-xs font-medium text-violet-400">
+              <VideoIcon className="h-3 w-3" />
+              <span>Video Generation</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -73,10 +82,10 @@ export function ChatInput({ onSend, isLoading, disabled }: ChatInputProps) {
               onClose={() => setIsPopupOpen(false)}
               imageGenerationEnabled={imageGenerationEnabled}
               onImageGenerationToggle={setImageGenerationEnabled}
+              videoGenerationEnabled={videoGenerationEnabled}
+              onVideoGenerationToggle={setVideoGenerationEnabled}
             />
           </div>
-
-
         </div>
 
         {/* Text Input */}
@@ -95,8 +104,6 @@ export function ChatInput({ onSend, isLoading, disabled }: ChatInputProps) {
             )}
           />
         </div>
-
-
       </div>
 
       <p className="text-xs text-center text-muted-foreground mt-2 px-4">

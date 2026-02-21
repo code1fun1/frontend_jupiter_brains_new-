@@ -626,7 +626,8 @@ export function useChatStore() {
     modelOverride?: string,
     slmEnabled: boolean = true,
     slmDecision: 'accept' | 'reject' | null = null,
-    imageGeneration: boolean = false
+    imageGeneration: boolean = false,
+    videoGeneration: boolean = false
   ) => {
     let session = currentSession;
 
@@ -780,18 +781,108 @@ export function useChatStore() {
       const sessionId = generateId() + '-' + Date.now().toString(36);
       const messageId = uuidv4();
 
+      // Build variables block with datetime and user context
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const currentDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const currentTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const userLang = navigator.language || 'en-US';
+      let userName = 'User';
+      try {
+        const rawUser = localStorage.getItem('jb_static_auth');
+        const parsed = rawUser ? JSON.parse(rawUser) : null;
+        if (parsed?.name) userName = parsed.name;
+        else if (parsed?.email) userName = parsed.email.split('@')[0];
+      } catch { /* ignore */ }
+
+      // Build the full model_item object matching Open WebUI format
+      const rawModel = models.find(m => m.id === modelToUse);
+      const modelItem = {
+        id: modelToUse,
+        name: modelToUse,
+        owned_by: 'openai',
+        openai: {
+          id: modelToUse,
+          name: modelToUse,
+          owned_by: 'openai',
+          openai: { id: modelToUse },
+          urlIdx: 0,
+          connection_type: 'external',
+        },
+        urlIdx: 0,
+        connection_type: 'external',
+        info: rawModel?.rawData?.info || {
+          id: modelToUse,
+          user_id: session?.id || '',
+          base_model_id: null,
+          name: modelToUse,
+          meta: {
+            description: null,
+            capabilities: {
+              file_context: true, vision: true, file_upload: true, web_search: true,
+              image_generation: true, code_interpreter: true, citations: true,
+              status_updates: true, builtin_tools: true,
+            },
+            suggestion_prompts: null,
+            tags: [],
+          },
+          access_control: null,
+          is_active: true,
+          updated_at: Math.floor(Date.now() / 1000),
+          created_at: Math.floor(Date.now() / 1000),
+        },
+        actions: [],
+        filters: [],
+        tags: [],
+      };
+
+      // Parent message = the user message we just constructed
+      const parentMessage = {
+        id: userMessage.id,
+        parentId: null,
+        childrenIds: [messageId],
+        role: 'user',
+        content: userMessage.content,
+        timestamp: Math.floor(Date.now() / 1000),
+        models: [modelToUse],
+      };
+
       const completionPayload = {
+        stream: false,
         model: modelToUse,
         messages: history,
-        id: messageId,
-        chat_id: session?.id,  // Backend chat ID
-        session_id: sessionId,  // WebSocket/session ID (separate from chat_id)
-        stream: false,
+        params: {},
+        tool_servers: [],
         features: {
           voice: false,
           image_generation: imageGeneration,
+          video_generation: videoGeneration,
           code_interpreter: false,
           web_search: false,
+        },
+        variables: {
+          '{{USER_NAME}}': userName,
+          '{{USER_LOCATION}}': 'Unknown',
+          '{{CURRENT_DATETIME}}': `${currentDate} ${currentTime}`,
+          '{{CURRENT_DATE}}': currentDate,
+          '{{CURRENT_TIME}}': currentTime,
+          '{{CURRENT_WEEKDAY}}': weekdays[now.getDay()],
+          '{{CURRENT_TIMEZONE}}': timezone,
+          '{{USER_LANGUAGE}}': userLang,
+        },
+        model_item: modelItem,
+        auto_select: false,
+        session_id: sessionId,
+        chat_id: session?.id,
+        id: messageId,
+        parent_id: userMessage.id,
+        parent_message: parentMessage,
+        background_tasks: {
+          title_generation: true,
+          tags_generation: true,
+          follow_up_generation: true,
         },
         metadata: {
           slm_enabled: slmEnabled,
@@ -901,16 +992,23 @@ export function useChatStore() {
             ? d.files
             : [];
 
-      // Resolve relative URLs (e.g. /api/v1/files/.../content) to full backend URLs
+      // Resolve relative URLs and auto-detect file type from extension if not provided
+      const VIDEO_EXTENSIONS = /\.(mp4|webm|mov|ogg|mkv|avi)(\?.*)?$/i;
       const backendBase = getBackendBaseUrl(); // e.g. "http://localhost:8080"
       const validFiles = aiFiles
         .filter((f) => typeof f?.url === 'string' && f.url.trim() !== '')
-        .map((f) => ({
-          ...f,
-          url: f.url.startsWith('http://') || f.url.startsWith('https://')
+        .map((f) => {
+          const resolvedUrl = f.url.startsWith('http://') || f.url.startsWith('https://')
             ? f.url
-            : `${backendBase}${f.url.startsWith('/') ? '' : '/'}${f.url}`,
-        }));
+            : `${backendBase}${f.url.startsWith('/') ? '' : '/'}${f.url}`;
+          // Auto-detect type if not already set
+          const detectedType = f.type
+            ? f.type
+            : VIDEO_EXTENSIONS.test(resolvedUrl)
+              ? 'video'
+              : 'image';
+          return { ...f, url: resolvedUrl, type: detectedType };
+        });
       console.log('useChatStore: resolved files =', validFiles);
 
       const assistantMessage: Message = {

@@ -63,37 +63,69 @@ export function ChatMessage({ message }: ChatMessageProps) {
           </div>
         )}
 
-        {/* Generated images */}
+        {/* Generated files: images and videos */}
         {hasFiles && (
           <div className="mt-3 flex flex-wrap gap-3">
-            {message.files!.map((file, i) => (
-              <a
-                key={i}
-                href={file.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block group"
-                title="Click to open full size"
-              >
-                <div className="relative overflow-hidden rounded-xl border border-border shadow-lg group-hover:shadow-xl transition-shadow duration-200">
-                  <img
+            {message.files!.map((file, i) => {
+              const isVideo = file.type === 'video';
+              return isVideo ? (
+                // --- Video ---
+                <div
+                  key={i}
+                  className="relative overflow-hidden rounded-xl border border-violet-500/30 shadow-lg max-w-sm w-full"
+                >
+                  <video
                     src={file.url}
-                    alt={file.name || `Generated image ${i + 1}`}
-                    loading="lazy"
-                    className="max-w-sm w-full object-cover rounded-xl group-hover:opacity-90 transition-opacity duration-200"
-                    onError={(e) => {
-                      const el = e.target as HTMLImageElement;
-                      el.style.display = 'none';
-                    }}
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <p className="text-white text-xs truncate">
-                      {file.name || 'Generated image'} · Open full size ↗
-                    </p>
+                    controls
+                    className="w-full rounded-xl"
+                    preload="metadata"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                  <div className="px-3 py-1.5 bg-violet-500/10 border-t border-violet-500/20 flex items-center gap-1.5">
+                    <span className="text-xs text-violet-400 font-medium">
+                      {file.name || 'Generated video'}
+                    </span>
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-auto text-xs text-violet-400/70 hover:text-violet-400 transition-colors"
+                    >
+                      Open ↗
+                    </a>
                   </div>
                 </div>
-              </a>
-            ))}
+              ) : (
+                // --- Image (unchanged) ---
+                <a
+                  key={i}
+                  href={file.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block group"
+                  title="Click to open full size"
+                >
+                  <div className="relative overflow-hidden rounded-xl border border-border shadow-lg group-hover:shadow-xl transition-shadow duration-200">
+                    <img
+                      src={file.url}
+                      alt={file.name || `Generated image ${i + 1}`}
+                      loading="lazy"
+                      className="max-w-sm w-full object-cover rounded-xl group-hover:opacity-90 transition-opacity duration-200"
+                      onError={(e) => {
+                        const el = e.target as HTMLImageElement;
+                        el.style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <p className="text-white text-xs truncate">
+                        {file.name || 'Generated image'} · Open full size ↗
+                      </p>
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
           </div>
         )}
 

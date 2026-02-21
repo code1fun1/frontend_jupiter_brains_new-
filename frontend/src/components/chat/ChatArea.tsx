@@ -8,7 +8,7 @@ import { ModelSuggestionDialog } from './ModelSuggestionDialog';
 
 interface ChatAreaProps {
   messages: Message[];
-  onSend: (message: string, modelOverride?: string, slmEnabled?: boolean, slmDecision?: 'accept' | 'reject' | null, imageGeneration?: boolean) => Promise<any>;
+  onSend: (message: string, modelOverride?: string, slmEnabled?: boolean, slmDecision?: 'accept' | 'reject' | null, imageGeneration?: boolean, videoGeneration?: boolean) => Promise<any>;
   isLoading: boolean;
   selectedModelName: string;
   selectedModel: string;
@@ -123,11 +123,11 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
     </div>
   );
 
-  async function handleSend(message: string, imageGeneration?: boolean) {
+  async function handleSend(message: string, imageGeneration?: boolean, videoGeneration?: boolean) {
     setPendingMessage(message);
-    console.log('ChatArea: Sending message with slmEnabled =', showRecommendationPopup, 'imageGeneration =', imageGeneration);
+    console.log('ChatArea: Sending message, imageGeneration =', imageGeneration, 'videoGeneration =', videoGeneration);
     // Initial send - slm_decision is null
-    const result = await onSend(message, undefined, showRecommendationPopup, null, imageGeneration);
+    const result = await onSend(message, undefined, showRecommendationPopup, null, imageGeneration, videoGeneration);
     console.log('ChatArea: Result from onSend =', result);
 
     // Check if result contains model recommendation
@@ -136,17 +136,13 @@ export function ChatArea({ messages, onSend, isLoading, selectedModelName, selec
       console.log('ChatArea: Recommendation received, showPopup =', showRecommendationPopup);
 
       if (showRecommendationPopup) {
-        // Show popup for user to confirm
         console.log('ChatArea: Setting recommendation state');
         setRecommendation(result.recommendation);
-        // Don't clear pending message - we'll use it when user chooses
       } else {
-        // Auto-switch to recommended model without popup
         console.log('ChatArea: Auto-switching to model =', recommendedModel);
         if (recommendedModel) {
           onChangeModel(recommendedModel);
-          // Resend with recommended model - slm_decision is "accept"
-          await onSend(message, recommendedModel, showRecommendationPopup, 'accept', imageGeneration);
+          await onSend(message, recommendedModel, showRecommendationPopup, 'accept', imageGeneration, videoGeneration);
         }
         setPendingMessage(null);
       }
