@@ -34,15 +34,28 @@ export function ModelConfiguration({
 }: ModelConfigurationProps) {
   const [openAIOverview, setOpenAIOverview] = useState<any | null>(null);
   const [enableOpenAI, setEnableOpenAI] = useState(true);
-  const [openAIBaseUrlsText, setOpenAIBaseUrlsText] = useState('');
-  const [openAIKeysText, setOpenAIKeysText] = useState('');
-  const [openAIConfigsJson, setOpenAIConfigsJson] = useState('{\n  \n}');
-  const [openAIModelId, setOpenAIModelId] = useState('');
-  const [openAIModelIds, setOpenAIModelIds] = useState<string[]>([]);
-  const [isAddingModelId, setIsAddingModelId] = useState(false);
   const [isSavingOpenAIConfig, setIsSavingOpenAIConfig] = useState(false);
   const [isImageModelDialogOpen, setIsImageModelDialogOpen] = useState(false);
   const [isVideoModelDialogOpen, setIsVideoModelDialogOpen] = useState(false);
+
+  // Multi-connection state: each entry = one provider connection
+  interface OpenAIConnection {
+    id: string; // local unique key
+    url: string;
+    apiKey: string;
+    modelIds: string[];
+    newModelId: string; // input buffer for adding model IDs
+  }
+
+  const makeEmptyConnection = (): OpenAIConnection => ({
+    id: crypto.randomUUID(),
+    url: '',
+    apiKey: '',
+    modelIds: [],
+    newModelId: '',
+  });
+
+  const [connections, setConnections] = useState<OpenAIConnection[]>([makeEmptyConnection()]);
 
   const getOverviewStorageKey = () => {
     try {
@@ -134,10 +147,22 @@ export function ModelConfiguration({
     if (!s) return;
 
     if (typeof s?.ENABLE_OPENAI_API === 'boolean') setEnableOpenAI(s.ENABLE_OPENAI_API);
-    if (Array.isArray(s?.OPENAI_API_BASE_URLS)) setOpenAIBaseUrlsText(s.OPENAI_API_BASE_URLS.join('\n'));
-    if (Array.isArray(s?.OPENAI_API_KEYS)) setOpenAIKeysText(s.OPENAI_API_KEYS.join('\n'));
-    if (s?.OPENAI_API_CONFIGS && typeof s.OPENAI_API_CONFIGS === 'object') {
-      setOpenAIConfigsJson(JSON.stringify(s.OPENAI_API_CONFIGS, null, 2));
+
+    // Rebuild connections array from saved OPENAI_API_CONFIGS
+    const urls: string[] = Array.isArray(s?.OPENAI_API_BASE_URLS) ? s.OPENAI_API_BASE_URLS : [];
+    const keys: string[] = Array.isArray(s?.OPENAI_API_KEYS) ? s.OPENAI_API_KEYS : [];
+    const cfgs: Record<string, any> = (s?.OPENAI_API_CONFIGS && typeof s.OPENAI_API_CONFIGS === 'object') ? s.OPENAI_API_CONFIGS : {};
+
+    const count = Math.max(urls.length, keys.length, Object.keys(cfgs).length);
+    if (count > 0) {
+      const loaded: OpenAIConnection[] = Array.from({ length: count }, (_, i) => ({
+        id: crypto.randomUUID(),
+        url: urls[i] || '',
+        apiKey: keys[i] || '',
+        modelIds: Array.isArray(cfgs[String(i)]?.model_ids) ? cfgs[String(i)].model_ids : [],
+        newModelId: '',
+      }));
+      setConnections(loaded);
     }
 
     toast.success('Loaded saved config into editor');
@@ -164,161 +189,84 @@ export function ModelConfiguration({
       .filter(Boolean);
   };
 
-  const handleAddModelId = async () => {
-    const trimmed = openAIModelId.trim();
+  // Helpers to mutate a specific connection by index
+  const updateConnection = (idx: number, patch: Partial<OpenAIConnection>) =>
+    setConnections((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+
+  const addModelIdToConnection = async (idx: number) => {
+    const conn = connections[idx];
+    const trimmed = conn.newModelId.trim();
     if (!trimmed) return;
 
-    const updatedIds = [...openAIModelIds, trimmed];
+    const updatedIds = [...conn.modelIds, trimmed];
+    // Optimistic UI update
+    updateConnection(idx, { modelIds: updatedIds, newModelId: '' });
 
-    setIsAddingModelId(true);
-    try {
-      const bearerHeader = getStoredAuthHeader();
-      const payload = {
-        ENABLE_OPENAI_API: enableOpenAI,
-        OPENAI_API_BASE_URLS: parseList(openAIBaseUrlsText),
-        OPENAI_API_KEYS: parseList(openAIKeysText),
-        OPENAI_API_CONFIGS: {
-          '0': {
-            enable: true,
-            tags: [],
-            prefix_id: '',
-            model_ids: updatedIds,
-            connection_type: 'external',
-            auth_type: 'bearer',
-          },
-        },
-      };
-
-      const res = await fetch(API_ENDPOINTS.openai.updateConfig(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...bearerHeader },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.detail || `HTTP ${res.status}`);
-      }
-
-      setOpenAIModelIds(updatedIds);
-      setOpenAIModelId('');
-      toast.success(`Model ID "${trimmed}" added!`);
-    } catch (e: any) {
-      toast.error(`Failed to add model ID: ${e?.message || 'Unknown error'}`);
-    } finally {
-      setIsAddingModelId(false);
-    }
+    // Build full payload from all connections (replace this connection's model IDs)
+    const updated = connections.map((c, i) => (i === idx ? { ...c, modelIds: updatedIds } : c));
+    await saveConnections(updated);
   };
 
-  const handleRemoveModelId = async (idToRemove: string) => {
-    const updatedIds = openAIModelIds.filter((id) => id !== idToRemove);
-    try {
-      const bearerHeader = getStoredAuthHeader();
-      const payload = {
-        ENABLE_OPENAI_API: enableOpenAI,
-        OPENAI_API_BASE_URLS: parseList(openAIBaseUrlsText),
-        OPENAI_API_KEYS: parseList(openAIKeysText),
-        OPENAI_API_CONFIGS: {
-          '0': {
-            enable: true,
-            tags: [],
-            prefix_id: '',
-            model_ids: updatedIds,
-            connection_type: 'external',
-            auth_type: 'bearer',
-          },
-        },
-      };
-      await fetch(API_ENDPOINTS.openai.updateConfig(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...bearerHeader },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      setOpenAIModelIds(updatedIds);
-      toast.success(`Model ID removed`);
-    } catch {
-      toast.error('Failed to remove model ID');
-    }
+  const removeModelIdFromConnection = async (connIdx: number, modelId: string) => {
+    const updatedIds = connections[connIdx].modelIds.filter((id) => id !== modelId);
+    updateConnection(connIdx, { modelIds: updatedIds });
+    const updated = connections.map((c, i) => (i === connIdx ? { ...c, modelIds: updatedIds } : c));
+    await saveConnections(updated);
   };
 
-  const handleSaveOpenAIConfig = async () => {
-    let configs: any = {};
-    try {
-      const trimmed = openAIConfigsJson.trim();
-      configs = trimmed ? JSON.parse(trimmed) : {};
-    } catch {
-      toast.error('OPENAI_API_CONFIGS must be valid JSON');
-      return;
-    }
+  const removeConnection = async (idx: number) => {
+    const updated = connections.filter((_, i) => i !== idx);
+    setConnections(updated.length > 0 ? updated : [makeEmptyConnection()]);
+    await saveConnections(updated.length > 0 ? updated : []);
+  };
 
-    // If model IDs were added via the + button, use the structured format.
-    // Otherwise fall back to the JSON textarea value.
-    const openAIConfigs = openAIModelIds.length > 0
-      ? {
-        '0': {
-          enable: true,
-          tags: [],
-          prefix_id: '',
-          model_ids: openAIModelIds,
-          connection_type: 'external',
-          auth_type: 'bearer',
-        },
-      }
-      : (configs && typeof configs === 'object' ? configs : {});
+  // Core save: builds OPENAI_API_CONFIGS with sequential indices from all connections
+  const saveConnections = async (conns: OpenAIConnection[]) => {
+    const bearerHeader = getStoredAuthHeader();
+    const apiConfigs: Record<string, any> = {};
+    conns.forEach((c, i) => {
+      apiConfigs[String(i)] = {
+        enable: true,
+        tags: [],
+        prefix_id: '',
+        model_ids: c.modelIds,
+        connection_type: 'external',
+        auth_type: 'bearer',
+      };
+    });
 
     const payload = {
       ENABLE_OPENAI_API: enableOpenAI,
-      OPENAI_API_BASE_URLS: parseList(openAIBaseUrlsText),
-      OPENAI_API_KEYS: parseList(openAIKeysText),
-      OPENAI_API_CONFIGS: openAIConfigs,
-      OPENAI_API_MODEL: openAIModelId.trim() || undefined,
+      OPENAI_API_BASE_URLS: conns.map((c) => c.url).filter(Boolean),
+      OPENAI_API_KEYS: conns.map((c) => c.apiKey).filter(Boolean),
+      OPENAI_API_CONFIGS: apiConfigs,
     };
 
+    const res = await fetch(API_ENDPOINTS.openai.updateConfig(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...bearerHeader },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || `HTTP ${res.status}`);
+    }
+    return payload;
+  };
+
+  const handleSaveOpenAIConfig = async () => {
     setIsSavingOpenAIConfig(true);
     try {
-      const updateConfigUrl = API_ENDPOINTS.openai.updateConfig();
+      const payload = await saveConnections(connections);
 
-      const res = await fetch(updateConfigUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          ...getStoredAuthHeader(),
-        },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const message =
-          typeof data?.detail === 'string'
-            ? data.detail
-            : typeof data?.message === 'string'
-              ? data.message
-              : `Failed to update OpenAI config (HTTP ${res.status})`;
-        toast.error(message);
-        return;
-      }
-
-      try {
-        localStorage.setItem(getOverviewStorageKey(), JSON.stringify(payload));
-      } catch {
-        // ignore persistence failures
-      }
-
+      try { localStorage.setItem(getOverviewStorageKey(), JSON.stringify(payload)); } catch { /* ignore */ }
       setOpenAIOverview(payload);
-
       toast.success('OpenAI config updated successfully');
 
       if (onRefreshModels) {
-        try {
-          await onRefreshModels();
-        } catch {
-          // ignore refresh errors
-        }
+        try { await onRefreshModels(); } catch { /* ignore */ }
       }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update OpenAI config');
@@ -632,83 +580,96 @@ export function ModelConfiguration({
                   <Switch checked={enableOpenAI} onCheckedChange={setEnableOpenAI} />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="openai-base-urls" className="text-zinc-400 text-xs uppercase tracking-wider ml-1">Base URLs</Label>
-                  <Textarea
-                    id="openai-base-urls"
-                    placeholder="https://api.openai.com/v1"
-                    value={openAIBaseUrlsText}
-                    onChange={(e) => setOpenAIBaseUrlsText(e.target.value)}
-                    className="bg-black/50 border-white/5 focus:border-purple-500/50 min-h-[80px]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="openai-keys" className="text-zinc-400 text-xs uppercase tracking-wider ml-1">API Keys</Label>
-                  <Textarea
-                    id="openai-keys"
-                    placeholder="sk-..."
-                    value={openAIKeysText}
-                    onChange={(e) => setOpenAIKeysText(e.target.value)}
-                    className="bg-black/50 border-white/5 focus:border-purple-500/50 min-h-[80px]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-zinc-400 text-xs uppercase tracking-wider ml-1">Model IDs</Label>
-
-                  {/* Existing model IDs list */}
-                  {openAIModelIds.length > 0 && (
-                    <div className="space-y-1.5">
-                      {openAIModelIds.map((id) => (
-                        <div key={id} className="flex items-center justify-between gap-2 px-3 py-2 bg-black/40 border border-white/5 rounded-md">
-                          <span className="text-sm text-zinc-200 font-mono truncate flex-1">{id}</span>
+                {/* Connection cards */}
+                <div className="space-y-4">
+                  {connections.map((conn, idx) => (
+                    <div
+                      key={conn.id}
+                      className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3 relative"
+                    >
+                      {/* Card header */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                          Connection {idx + 1}
+                        </span>
+                        {connections.length > 1 && (
                           <button
                             type="button"
-                            onClick={() => handleRemoveModelId(id)}
-                            className="text-zinc-500 hover:text-red-400 transition-colors text-lg leading-none flex-shrink-0"
-                            title="Remove"
+                            onClick={() => removeConnection(idx)}
+                            className="text-zinc-600 hover:text-red-400 transition-colors text-sm"
+                            title="Remove connection"
                           >
-                            −
+                            ✕
                           </button>
+                        )}
+                      </div>
+
+                      {/* Base URL */}
+                      <div className="space-y-1">
+                        <Label className="text-zinc-400 text-xs uppercase tracking-wider ml-1">Base URL</Label>
+                        <input
+                          type="text"
+                          placeholder="https://api.openai.com/v1"
+                          value={conn.url}
+                          onChange={(e) => updateConnection(idx, { url: e.target.value })}
+                          className="w-full rounded-md px-3 py-2 text-sm bg-black/50 border border-white/5 text-white placeholder:text-zinc-500 focus:outline-none focus:border-purple-500/50"
+                        />
+                      </div>
+
+                      {/* API Key */}
+                      <div className="space-y-1">
+                        <Label className="text-zinc-400 text-xs uppercase tracking-wider ml-1">API Key</Label>
+                        <input
+                          type="password"
+                          placeholder="sk-... or r8_..."
+                          value={conn.apiKey}
+                          onChange={(e) => updateConnection(idx, { apiKey: e.target.value })}
+                          className="w-full rounded-md px-3 py-2 text-sm bg-black/50 border border-white/5 text-white placeholder:text-zinc-500 focus:outline-none focus:border-purple-500/50"
+                        />
+                      </div>
+
+                      {/* Model IDs */}
+                      <div className="space-y-1.5">
+                        <Label className="text-zinc-400 text-xs uppercase tracking-wider ml-1">Model IDs</Label>
+                        {conn.modelIds.map((mid) => (
+                          <div key={mid} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-black/40 border border-white/5 rounded-md">
+                            <span className="text-xs text-zinc-200 font-mono truncate flex-1">{mid}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeModelIdFromConnection(idx, mid)}
+                              className="text-zinc-500 hover:text-red-400 transition-colors text-base leading-none flex-shrink-0"
+                            >−</button>
+                          </div>
+                        ))}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Add a model ID"
+                            value={conn.newModelId}
+                            onChange={(e) => updateConnection(idx, { newModelId: e.target.value })}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addModelIdToConnection(idx); } }}
+                            className="flex-1 rounded-md px-3 py-1.5 text-sm bg-black/50 border border-white/5 text-white placeholder:text-zinc-500 focus:outline-none focus:border-purple-500/50"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => addModelIdToConnection(idx)}
+                            disabled={!conn.newModelId.trim()}
+                            className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-white/10 text-zinc-400 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 text-base"
+                          >+</button>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  )}
-
-                  {/* Add model ID row */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="openai-model-id"
-                      type="text"
-                      placeholder="Add a model ID"
-                      value={openAIModelId}
-                      onChange={(e) => setOpenAIModelId(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddModelId(); } }}
-                      className="flex-1 rounded-md px-3 py-2 text-sm bg-black/50 border border-white/5 text-white placeholder:text-zinc-500 focus:outline-none focus:border-purple-500/50"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddModelId}
-                      disabled={isAddingModelId || !openAIModelId.trim()}
-                      title="Add model ID"
-                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full border border-white/10 text-zinc-400 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-lg"
-                    >
-                      {isAddingModelId ? '…' : '+'}
-                    </button>
-                  </div>
+                  ))}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="openai-configs" className="text-zinc-400 text-xs uppercase tracking-wider ml-1">Advanced Config (JSON)</Label>
-                  <Textarea
-                    id="openai-configs"
-                    placeholder='{}'
-                    value={openAIConfigsJson}
-                    onChange={(e) => setOpenAIConfigsJson(e.target.value)}
-                    className="bg-black/50 border-white/5 focus:border-purple-500/50 min-h-[120px] font-mono text-xs"
-                  />
-                </div>
+                {/* Add another connection */}
+                <button
+                  type="button"
+                  onClick={() => setConnections((prev) => [...prev, makeEmptyConnection()])}
+                  className="w-full py-2 rounded-xl border border-dashed border-white/20 text-zinc-500 hover:text-white hover:border-white/40 transition-colors text-sm"
+                >
+                  + Add another connection
+                </button>
 
                 <Button
                   onClick={handleSaveOpenAIConfig}
