@@ -591,7 +591,19 @@ export function ModelConfiguration({
                     <div className="font-semibold text-sm">Enabled Gateway</div>
                     <div className="text-xs text-zinc-500">Allow AI traffic through this provider</div>
                   </div>
-                  <Switch checked={enableOpenAI} onCheckedChange={setEnableOpenAI} />
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${enableOpenAI
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      }`}>
+                      {enableOpenAI ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <Switch
+                      checked={enableOpenAI}
+                      onCheckedChange={setEnableOpenAI}
+                      className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-500/60"
+                    />
+                  </div>
                 </div>
 
                 {/* Connection cards */}

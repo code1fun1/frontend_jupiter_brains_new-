@@ -263,13 +263,23 @@ export function useChatStore() {
 
             // Update session with messages from backend
             if (data.chat && Array.isArray(data.chat.messages)) {
-              const backendMessages = data.chat.messages.map((msg: any) => ({
-                id: msg.id || generateId(),
-                role: msg.role,
-                content: msg.content,
-                timestamp: new Date(msg.timestamp || msg.created_at * 1000),
-                files: Array.isArray(msg.files) && msg.files.length > 0 ? msg.files : undefined,
-              }));
+              // Recover files from localStorage if backend doesn't have them yet
+              const localSessions = loadSessions();
+              const localForCurrent = localSessions.find(s => s.id === currentSessionId);
+              const backendMessages = data.chat.messages.map((msg: any) => {
+                const localMsg = localForCurrent?.messages.find(m => m.id === msg.id);
+                const files =
+                  (Array.isArray(msg.files) && msg.files.length > 0)
+                    ? msg.files
+                    : (localMsg?.files && localMsg.files.length > 0 ? localMsg.files : undefined);
+                return {
+                  id: msg.id || generateId(),
+                  role: msg.role,
+                  content: msg.content,
+                  timestamp: new Date(msg.timestamp || msg.created_at * 1000),
+                  files,
+                };
+              });
 
               console.log('Setting messages:', backendMessages.length);
               setSessions(prev => prev.map(s =>
@@ -591,13 +601,24 @@ export function useChatStore() {
 
           // Update session with messages from backend
           if (data.chat && Array.isArray(data.chat.messages)) {
-            const backendMessages = data.chat.messages.map((msg: any) => ({
-              id: msg.id || generateId(),
-              role: msg.role,
-              content: msg.content,
-              timestamp: new Date(msg.timestamp || msg.created_at * 1000),
-              files: Array.isArray(msg.files) && msg.files.length > 0 ? msg.files : undefined,
-            }));
+            // Load localStorage sessions to recover files that may not be on backend yet
+            const localSessions = loadSessions();
+            const localSession = localSessions.find(s => s.id === sessionId);
+            const backendMessages = data.chat.messages.map((msg: any) => {
+              // Prefer files from backend; fall back to localStorage-cached files
+              const localMsg = localSession?.messages.find(m => m.id === msg.id);
+              const files =
+                (Array.isArray(msg.files) && msg.files.length > 0)
+                  ? msg.files
+                  : (localMsg?.files && localMsg.files.length > 0 ? localMsg.files : undefined);
+              return {
+                id: msg.id || generateId(),
+                role: msg.role,
+                content: msg.content,
+                timestamp: new Date(msg.timestamp || msg.created_at * 1000),
+                files,
+              };
+            });
 
             setSessions(prev => prev.map(s =>
               s.id === sessionId
@@ -1099,6 +1120,10 @@ export function useChatStore() {
                 messageObj.modelName = modelToUse;
                 messageObj.modelIdx = 0;
                 messageObj.done = true;
+                // Persist image/video files so they survive page refresh
+                if (msg.files && msg.files.length > 0) {
+                  messageObj.files = msg.files;
+                }
               }
 
               messagesObject[msg.id] = messageObj;

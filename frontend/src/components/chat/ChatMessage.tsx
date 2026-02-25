@@ -1,7 +1,7 @@
 import { User } from 'lucide-react';
 import { Message } from '@/types/chat';
 import { cn } from '@/lib/utils';
-import JupiterBrainsLogo from '@/components/icons/JupiterBrainsLogo';
+import jupiterBrainsLogo from '@/assets/jupiter-brains-logo.png';
 
 interface ChatMessageProps {
   message: Message;
@@ -42,19 +42,26 @@ export function ChatMessage({ message }: ChatMessageProps) {
     >
       <div className="flex-shrink-0">
         {isUser ? (
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <User className="h-5 w-5 text-primary-foreground" />
+          <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center ring-1 ring-zinc-600">
+            <User className="h-5 w-5 text-zinc-200" />
           </div>
         ) : (
-          <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-            <JupiterBrainsLogo className="w-5 h-5 text-foreground" />
+          <div className="w-8 h-8 rounded-full bg-violet-600/30 flex items-center justify-center ring-1 ring-violet-500/40">
+            <img src={jupiterBrainsLogo} alt="JupiterBrains" className="w-5 h-5" />
           </div>
         )}
       </div>
       <div className="flex-1 min-w-0 space-y-2">
-        <div className="font-semibold text-sm">
-          {isUser ? 'You' : 'JupiterBrains'}
-        </div>
+        {isUser ? (
+          <div className="font-semibold text-sm text-zinc-400 tracking-wide">You</div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse flex-shrink-0" />
+            <span className="font-semibold text-sm bg-gradient-to-r from-violet-300 to-purple-400 bg-clip-text text-transparent tracking-wide">
+              JupiterBrains
+            </span>
+          </div>
+        )}
 
         {/* Text content — hidden when images are present */}
         {message.content && !hasFiles && (

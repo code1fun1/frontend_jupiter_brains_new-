@@ -266,7 +266,7 @@ export function ChatSidebar({
       {/* Sidebar */}
       <div
         className={cn(
-          'flex flex-col h-full bg-sidebar border-r border-sidebar-border transition-all duration-300 z-50',
+          'flex flex-col h-full bg-zinc-950 border-r border-sidebar-border transition-all duration-300 z-50',
           // Mobile: fixed overlay
           'fixed md:relative',
           isOpen ? 'w-80 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0 md:w-0 overflow-hidden'
