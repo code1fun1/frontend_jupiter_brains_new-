@@ -1055,7 +1055,12 @@ export function useChatStore() {
 
       // Call /api/chat/completed to save the conversation
       try {
-        const updatedMessages = [...session!.messages, assistantMessage];
+        // Ensure userMessage is in the history we are saving!
+        // Because setSessions is async, `session!.messages` might not have userMessage yet.
+        const hasUserMessage = session!.messages.some(m => m.id === userMessage.id);
+        const baseMessages = hasUserMessage ? session!.messages : [...session!.messages, userMessage];
+
+        const updatedMessages = [...baseMessages, assistantMessage];
 
         // Convert messages to backend format
         const formattedMessages = updatedMessages.map(msg => ({

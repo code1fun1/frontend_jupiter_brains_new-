@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, GripVertical, Settings2, ExternalLink, Pencil, Image, Video } from 'lucide-react';
+import { Trash2, GripVertical, Settings2, ExternalLink, Pencil, Image, Video, Server } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { AIModel } from '@/types/chat';
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { ImageModelDialog, ImageModelConfig } from './ImageModelDialog';
 import { VideoModelDialog, VideoModelConfig } from './VideoModelDialog';
+import { OnPremDialog, OnPremConfig } from './OnPremDialog';
 
 // crypto.randomUUID() is only available in secure contexts (HTTPS).
 // This polyfill works on HTTP (local dev) too.
@@ -51,6 +52,7 @@ export function ModelConfiguration({
   const [isSavingOpenAIConfig, setIsSavingOpenAIConfig] = useState(false);
   const [isImageModelDialogOpen, setIsImageModelDialogOpen] = useState(false);
   const [isVideoModelDialogOpen, setIsVideoModelDialogOpen] = useState(false);
+  const [isOnPremDialogOpen, setIsOnPremDialogOpen] = useState(false);
 
   // Multi-connection state: each entry = one provider connection
   interface OpenAIConnection {
@@ -524,6 +526,10 @@ export function ModelConfiguration({
     console.log('[VideoModelDialog] Config saved (no API wired yet):', config);
   };
 
+  const handleSaveOnPremConfig = (config: OnPremConfig) => {
+    console.log('[OnPremDialog] Config saved:', config);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -593,8 +599,8 @@ export function ModelConfiguration({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${enableOpenAI
-                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
                       }`}>
                       {enableOpenAI ? 'Enabled' : 'Disabled'}
                     </span>
@@ -713,7 +719,7 @@ export function ModelConfiguration({
             className="bg-white text-black hover:bg-zinc-200 transition-all font-semibold gap-2 shadow-[0_0_15px_rgba(255,255,255,0.1)]"
           >
             <Image className="h-4 w-4" />
-            Enable Image Models
+            Image Config
           </Button>
 
           <Button
@@ -721,7 +727,15 @@ export function ModelConfiguration({
             className="bg-violet-600 text-white hover:bg-violet-500 transition-all font-semibold gap-2 shadow-[0_0_15px_rgba(139,92,246,0.3)]"
           >
             <Video className="h-4 w-4" />
-            Enable Video Models
+            Video Config
+          </Button>
+
+          <Button
+            onClick={() => setIsOnPremDialogOpen(true)}
+            className="bg-emerald-600 text-white hover:bg-emerald-500 transition-all font-semibold gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+          >
+            <Server className="h-4 w-4" />
+            On-Prem Config
           </Button>
         </div>
       </div>
@@ -785,6 +799,12 @@ export function ModelConfiguration({
         isOpen={isVideoModelDialogOpen}
         onClose={() => setIsVideoModelDialogOpen(false)}
         onSave={handleSaveVideoConfig}
+      />
+      {/* On-Prem Config Dialog */}
+      <OnPremDialog
+        isOpen={isOnPremDialogOpen}
+        onClose={() => setIsOnPremDialogOpen(false)}
+        onSave={handleSaveOnPremConfig}
       />
     </div>
   );

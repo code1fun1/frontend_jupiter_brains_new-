@@ -68,6 +68,9 @@ export const API_ENDPOINTS = {
     video: {
         updateConfig: () => `${getBackendBaseUrl()}/api/v1/video/config/update`,
     },
+    onprem: {
+        updateConfig: () => `${getBackendBaseUrl()}/api/v1/onprem/config/update`,
+    },
 } as const;
 
 /**

@@ -1,4 +1,4 @@
-import { PanelLeft, Sparkles } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from './ModelSelector';
 import { Switch } from '@/components/ui/switch';
@@ -52,7 +52,6 @@ export function ChatHeader({
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="ml-auto flex items-center gap-2 cursor-help">
-              <Sparkles className="h-4 w-4 text-white/70" />
               <Switch
                 checked={showRecommendationPopup}
                 onCheckedChange={onToggleRecommendation}

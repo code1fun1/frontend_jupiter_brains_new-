@@ -111,7 +111,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block group"
-                  title="Click to open full size"
+                  title="Click to download"
                 >
                   <div className="relative overflow-hidden rounded-xl border border-border shadow-lg group-hover:shadow-xl transition-shadow duration-200">
                     <img
@@ -126,7 +126,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
                     />
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       <p className="text-white text-xs truncate">
-                        {file.name || 'Generated image'} · Open full size ↗
+                        {file.name || 'Generated image'} · Click to download ↓
                       </p>
                     </div>
                   </div>

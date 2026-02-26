@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import {
     Select,
     SelectContent,
@@ -22,7 +21,6 @@ import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/utils/config';
 
 export interface VideoModelConfig {
-    enabled: boolean;
     model: string;
     videoGenerationEngine: string;
     replicateApiBaseUrl: string;
@@ -42,18 +40,23 @@ interface VideoModelDialogProps {
 }
 
 export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogProps) {
-    const [config, setConfig] = useState<VideoModelConfig>({
-        enabled: true,
-        model: 'minimax/video-01:5aa835260ff7f40f4069c41185f72036accf99e29957bb4a3b3a911f3b6c1912',
-        videoGenerationEngine: 'replicate',
-        replicateApiBaseUrl: 'https://api.replicate.com/v1',
-        replicateApiKey: '',
-        openAIVideoApiBaseUrl: 'https://api.openai.com/v1',
-        openAIVideoApiKey: '',
-        openAIVideoApiVersion: '',
-        openAIVideoGenerationEndpoint: '/video/generations',
-        pollingInterval: 5,
-        timeout: 600,
+    const [config, setConfig] = useState<VideoModelConfig>(() => {
+        const saved = localStorage.getItem('jb_video_config');
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) { }
+        }
+        return {
+            model: 'minimax/video-01:5aa835260ff7f40f4069c41185f72036accf99e29957bb4a3b3a911f3b6c1912',
+            videoGenerationEngine: 'replicate',
+            replicateApiBaseUrl: 'https://api.replicate.com/v1',
+            replicateApiKey: '',
+            openAIVideoApiBaseUrl: 'https://api.openai.com/v1',
+            openAIVideoApiKey: '',
+            openAIVideoApiVersion: '',
+            openAIVideoGenerationEndpoint: '/video/generations',
+            pollingInterval: 5,
+            timeout: 600,
+        };
     });
     const [showApiKey, setShowApiKey] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -63,7 +66,7 @@ export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogPr
         try {
             // Build the payload dynamically from form values
             const payload = {
-                ENABLE_VIDEO_GENERATION: config.enabled,
+                ENABLE_VIDEO_GENERATION: true,
                 VIDEO_GENERATION_ENGINE: config.videoGenerationEngine,
                 VIDEO_GENERATION_MODEL: config.model,
                 REPLICATE_API_BASE_URL: config.replicateApiBaseUrl,
@@ -94,6 +97,7 @@ export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogPr
             const result = await response.json().catch(() => ({}));
             console.log('[VideoModelDialog] API response:', result);
 
+            localStorage.setItem('jb_video_config', JSON.stringify(config));
             toast.success('Video model configuration saved successfully!');
             onSave(config);
             onClose();
@@ -107,7 +111,10 @@ export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogPr
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[600px] bg-zinc-950 border-white/10 text-white backdrop-blur-xl max-h-[90vh] overflow-y-auto">
+            <DialogContent
+                className="sm:max-w-[600px] bg-zinc-950 border-white/10 text-white backdrop-blur-xl max-h-[90vh] overflow-y-auto"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle className="text-xl font-bold bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent flex items-center gap-2">
                         <Video className="h-5 w-5 text-violet-400" />
@@ -119,27 +126,6 @@ export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogPr
                 </DialogHeader>
 
                 <div className="space-y-6 py-4">
-
-                    {/* General Section */}
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-semibold text-white/90 border-b border-white/10 pb-2">
-                            General
-                        </h3>
-                        <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
-                            <div className="flex flex-col">
-                                <Label htmlFor="video-gen-toggle" className="text-sm font-medium text-white cursor-pointer">
-                                    Video Generation
-                                </Label>
-                                <span className="text-xs text-zinc-500 mt-0.5">Enable video generation for users</span>
-                            </div>
-                            <Switch
-                                id="video-gen-toggle"
-                                checked={config.enabled}
-                                onCheckedChange={(v) => setConfig({ ...config, enabled: v })}
-                                className="data-[state=checked]:bg-violet-500"
-                            />
-                        </div>
-                    </div>
 
                     {/* Create Video Section */}
                     <div className="space-y-4">

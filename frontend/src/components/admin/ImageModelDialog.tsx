@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
     Select,
@@ -27,7 +26,6 @@ interface ImageModelDialogProps {
 }
 
 export interface ImageModelConfig {
-    enabled: boolean;
     model: string;
     imageSize: string;
     imageGenerationEngine: string;
@@ -38,26 +36,35 @@ export interface ImageModelConfig {
 }
 
 export function ImageModelDialog({ isOpen, onClose, onSave }: ImageModelDialogProps) {
-    const [config, setConfig] = useState<ImageModelConfig>({
-        enabled: true,
-        model: '',
-        imageSize: '',
-        imageGenerationEngine: '',
-        openAIBaseUrl: '',
-        openAIKey: '',
-        openAIVersion: '',
-        additionalParams: '',
+    const [config, setConfig] = useState<ImageModelConfig>(() => {
+        const saved = localStorage.getItem('jb_image_config');
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) { }
+        }
+        return {
+            model: '',
+            imageSize: '',
+            imageGenerationEngine: '',
+            openAIBaseUrl: '',
+            openAIKey: '',
+            openAIVersion: '',
+            additionalParams: '',
+        };
     });
     const [showApiKey, setShowApiKey] = useState(false);
 
     const handleSave = () => {
+        localStorage.setItem('jb_image_config', JSON.stringify(config));
         onSave(config);
         onClose();
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[600px] bg-zinc-950 border-white/10 text-white backdrop-blur-xl max-h-[90vh] overflow-y-auto">
+            <DialogContent
+                className="sm:max-w-[600px] bg-zinc-950 border-white/10 text-white backdrop-blur-xl max-h-[90vh] overflow-y-auto"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle className="text-xl font-bold bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent flex items-center gap-2">
                         <Image className="h-5 w-5 text-white" />
@@ -67,37 +74,7 @@ export function ImageModelDialog({ isOpen, onClose, onSave }: ImageModelDialogPr
                         Configure image generation models and settings
                     </DialogDescription>
                 </DialogHeader>
-
                 <div className="space-y-6 py-4">
-                    {/* General Section */}
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-semibold text-white/90 border-b border-white/10 pb-2">
-                            General
-                        </h3>
-                        <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
-                            <div className="flex flex-col">
-                                <Label htmlFor="img-gen-toggle" className="text-sm font-medium text-white cursor-pointer">
-                                    Image Generation
-                                </Label>
-                                <span className="text-xs text-zinc-500 mt-0.5">Enable image generation for users</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${config.enabled
-                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                    }`}>
-                                    {config.enabled ? 'Enabled' : 'Disabled'}
-                                </span>
-                                <Switch
-                                    id="img-gen-toggle"
-                                    checked={config.enabled}
-                                    onCheckedChange={(v) => setConfig({ ...config, enabled: v })}
-                                    className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-500/60"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Create Image Section */}
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-white/90 border-b border-white/10 pb-2">
