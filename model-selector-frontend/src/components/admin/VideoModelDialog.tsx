@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Video, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,27 +39,78 @@ interface VideoModelDialogProps {
     onSave: (config: VideoModelConfig) => void;
 }
 
+const getAuthHeader = (): Record<string, string> => {
+    try {
+        const raw = localStorage.getItem('jb_static_auth_session');
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as any;
+        const token = typeof parsed?.token === 'string' ? parsed.token : '';
+        if (!token) return {};
+        const tokenType = typeof parsed?.token_type === 'string' ? parsed.token_type : 'Bearer';
+        return { Authorization: `${tokenType} ${token}`.trim() };
+    } catch { return {}; }
+};
+
+const defaultConfig: VideoModelConfig = {
+    model: 'minimax/video-01:5aa835260ff7f40f4069c41185f72036accf99e29957bb4a3b3a911f3b6c1912',
+    videoGenerationEngine: 'replicate',
+    replicateApiBaseUrl: 'https://api.replicate.com/v1',
+    replicateApiKey: '',
+    openAIVideoApiBaseUrl: 'https://api.openai.com/v1',
+    openAIVideoApiKey: '',
+    openAIVideoApiVersion: '',
+    openAIVideoGenerationEndpoint: '/video/generations',
+    pollingInterval: 5,
+    timeout: 600,
+};
+
 export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogProps) {
-    const [config, setConfig] = useState<VideoModelConfig>(() => {
-        const saved = localStorage.getItem('jb_video_config');
-        if (saved) {
-            try { return JSON.parse(saved); } catch (e) { }
-        }
-        return {
-            model: 'minimax/video-01:5aa835260ff7f40f4069c41185f72036accf99e29957bb4a3b3a911f3b6c1912',
-            videoGenerationEngine: 'replicate',
-            replicateApiBaseUrl: 'https://api.replicate.com/v1',
-            replicateApiKey: '',
-            openAIVideoApiBaseUrl: 'https://api.openai.com/v1',
-            openAIVideoApiKey: '',
-            openAIVideoApiVersion: '',
-            openAIVideoGenerationEndpoint: '/video/generations',
-            pollingInterval: 5,
-            timeout: 600,
-        };
-    });
+    const [config, setConfig] = useState<VideoModelConfig>(defaultConfig);
     const [showApiKey, setShowApiKey] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+
+    /** Fetch existing video config from backend whenever dialog opens */
+    useEffect(() => {
+        if (!isOpen) return;
+        const fetchConfig = async () => {
+            setIsLoading(true);
+            try {
+                const res = await fetch(API_ENDPOINTS.video.getConfig(), {
+                    cache: 'no-store',
+                    headers: {
+                        Accept: 'application/json',
+                        'Cache-Control': 'no-cache',
+                        ...getAuthHeader()
+                    },
+                    credentials: 'include',
+                });
+                if (!res.ok) return;
+                const data = await res.json().catch(() => null);
+                if (!data) return;
+                // Extract only the fields this dialog needs; ignore the rest
+                setConfig((prev) => ({
+                    ...prev,
+                    model: data.VIDEO_GENERATION_MODEL ?? data.model ?? prev.model,
+                    videoGenerationEngine: data.VIDEO_GENERATION_ENGINE ?? data.videoGenerationEngine ?? prev.videoGenerationEngine,
+                    replicateApiBaseUrl: data.REPLICATE_API_BASE_URL ?? data.replicateApiBaseUrl ?? prev.replicateApiBaseUrl,
+                    replicateApiKey: data.REPLICATE_API_KEY ?? data.replicateApiKey ?? prev.replicateApiKey,
+                    openAIVideoApiBaseUrl: data.OPENAI_VIDEO_API_BASE_URL ?? data.openAIVideoApiBaseUrl ?? prev.openAIVideoApiBaseUrl,
+                    openAIVideoApiKey: data.OPENAI_VIDEO_API_KEY ?? data.openAIVideoApiKey ?? prev.openAIVideoApiKey,
+                    openAIVideoApiVersion: data.OPENAI_VIDEO_API_VERSION ?? data.openAIVideoApiVersion ?? prev.openAIVideoApiVersion,
+                    openAIVideoGenerationEndpoint: data.OPENAI_VIDEO_GENERATION_ENDPOINT ?? data.openAIVideoGenerationEndpoint ?? prev.openAIVideoGenerationEndpoint,
+                    pollingInterval: data.VIDEO_POLL_INTERVAL_SECONDS ?? data.pollingInterval ?? prev.pollingInterval,
+                    timeout: data.VIDEO_TIMEOUT_SECONDS ?? data.timeout ?? prev.timeout,
+                }));
+            } catch (err) {
+                console.warn('[VideoModelDialog] Could not load saved config:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchConfig();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -83,7 +134,7 @@ export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogPr
 
             const response = await fetch(API_ENDPOINTS.video.updateConfig(), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
                 credentials: 'include',
                 body: JSON.stringify(payload),
             });
@@ -112,7 +163,7 @@ export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogPr
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent
-                className="sm:max-w-[600px] bg-zinc-950 border-white/10 text-white backdrop-blur-xl max-h-[90vh] overflow-y-auto"
+                className="sm:max-w-[600px] bg-zinc-950 border-white/10 text-white backdrop-blur-xl max-h-[90vh] flex flex-col"
                 onOpenAutoFocus={(e) => e.preventDefault()}
             >
                 <DialogHeader>
@@ -125,8 +176,13 @@ export function VideoModelDialog({ isOpen, onClose, onSave }: VideoModelDialogPr
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6 py-4">
-
+                <div className="space-y-6 py-4 overflow-y-auto flex-1 pr-2 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20 hover:scrollbar-thumb-white/40">
+                    {/* Loading indicator */}
+                    {isLoading && (
+                        <div className="text-xs text-zinc-400 italic text-center animate-pulse">
+                            Loading saved configuration...
+                        </div>
+                    )}
                     {/* Create Video Section */}
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-white/90 border-b border-white/10 pb-2">

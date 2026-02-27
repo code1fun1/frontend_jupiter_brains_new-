@@ -63,13 +63,16 @@ export const API_ENDPOINTS = {
     images: {
         updateConfig: () => `${getBackendBaseUrl()}/api/v1/images/config/update`,
         config: () => `${getBackendBaseUrl()}/api/config`,
+        getConfig: () => `${getBackendBaseUrl()}/api/v1/images/config`,
         models: () => `${getBackendBaseUrl()}/api/v1/images/models`,
     },
     video: {
         updateConfig: () => `${getBackendBaseUrl()}/api/v1/video/config/update`,
+        getConfig: () => `${getBackendBaseUrl()}/api/v1/video/config`,
     },
     onprem: {
         updateConfig: () => `${getBackendBaseUrl()}/api/v1/onprem/config/update`,
+        getConfig: () => `${getBackendBaseUrl()}/api/v1/onprem/config`,
     },
 } as const;
 

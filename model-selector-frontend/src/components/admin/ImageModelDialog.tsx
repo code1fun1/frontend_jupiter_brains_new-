@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Image, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { API_ENDPOINTS } from '@/utils/config';
 
 interface ImageModelDialogProps {
     isOpen: boolean;
@@ -35,23 +36,70 @@ export interface ImageModelConfig {
     additionalParams: string;
 }
 
+const getAuthHeader = (): Record<string, string> => {
+    try {
+        const raw = localStorage.getItem('jb_static_auth_session');
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as any;
+        const token = typeof parsed?.token === 'string' ? parsed.token : '';
+        if (!token) return {};
+        const tokenType = typeof parsed?.token_type === 'string' ? parsed.token_type : 'Bearer';
+        return { Authorization: `${tokenType} ${token}`.trim() };
+    } catch { return {}; }
+};
+
 export function ImageModelDialog({ isOpen, onClose, onSave }: ImageModelDialogProps) {
-    const [config, setConfig] = useState<ImageModelConfig>(() => {
-        const saved = localStorage.getItem('jb_image_config');
-        if (saved) {
-            try { return JSON.parse(saved); } catch (e) { }
-        }
-        return {
-            model: '',
-            imageSize: '',
-            imageGenerationEngine: '',
-            openAIBaseUrl: '',
-            openAIKey: '',
-            openAIVersion: '',
-            additionalParams: '',
-        };
+    const [config, setConfig] = useState<ImageModelConfig>({
+        model: '',
+        imageSize: '',
+        imageGenerationEngine: '',
+        openAIBaseUrl: '',
+        openAIKey: '',
+        openAIVersion: '',
+        additionalParams: '',
     });
     const [showApiKey, setShowApiKey] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+
+    /** Fetch existing image config from backend whenever dialog opens */
+    useEffect(() => {
+        if (!isOpen) return;
+        const fetchConfig = async () => {
+            setIsLoading(true);
+            try {
+                const res = await fetch(API_ENDPOINTS.images.getConfig(), {
+                    cache: 'no-store',
+                    headers: {
+                        Accept: 'application/json',
+                        'Cache-Control': 'no-cache',
+                        ...getAuthHeader()
+                    },
+                    credentials: 'include',
+                });
+                if (!res.ok) return;
+                const data = await res.json().catch(() => null);
+                if (!data) return;
+                // Extract only the fields this dialog needs; ignore the rest
+                setConfig({
+                    model: data.IMAGE_GENERATION_MODEL ?? data.model ?? '',
+                    imageSize: data.IMAGE_SIZE ?? data.imageSize ?? '',
+                    imageGenerationEngine: data.IMAGE_GENERATION_ENGINE ?? data.imageGenerationEngine ?? '',
+                    openAIBaseUrl: data.IMAGES_OPENAI_API_BASE_URL ?? data.openAIBaseUrl ?? '',
+                    openAIKey: data.IMAGES_OPENAI_API_KEY ?? data.openAIKey ?? '',
+                    openAIVersion: data.IMAGES_OPENAI_API_VERSION ?? data.openAIVersion ?? '',
+                    additionalParams: data.IMAGES_OPENAI_API_PARAMS
+                        ? JSON.stringify(data.IMAGES_OPENAI_API_PARAMS, null, 2)
+                        : (data.additionalParams ?? ''),
+                });
+            } catch (err) {
+                console.warn('[ImageModelDialog] Could not load saved config:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchConfig();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
 
     const handleSave = () => {
         localStorage.setItem('jb_image_config', JSON.stringify(config));
@@ -75,6 +123,12 @@ export function ImageModelDialog({ isOpen, onClose, onSave }: ImageModelDialogPr
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-6 py-4">
+                    {/* Loading indicator */}
+                    {isLoading && (
+                        <div className="text-xs text-zinc-400 italic text-center animate-pulse">
+                            Loading saved configuration...
+                        </div>
+                    )}
                     {/* Create Image Section */}
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-white/90 border-b border-white/10 pb-2">

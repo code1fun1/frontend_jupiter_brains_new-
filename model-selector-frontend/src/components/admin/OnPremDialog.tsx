@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Server, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,6 +11,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { API_ENDPOINTS } from '@/utils/config';
 
 export interface OnPremConfig {
     modelId: string;
@@ -26,20 +27,15 @@ interface OnPremDialogProps {
 }
 
 export function OnPremDialog({ isOpen, onClose, onSave }: OnPremDialogProps) {
-    const [config, setConfig] = useState<OnPremConfig>(() => {
-        const saved = localStorage.getItem('jb_onprem_config');
-        if (saved) {
-            try { return JSON.parse(saved); } catch (e) { }
-        }
-        return {
-            modelId: '',
-            serverModelId: '',
-            baseUrl: '',
-            apiKey: '',
-        };
+    const [config, setConfig] = useState<OnPremConfig>({
+        modelId: '',
+        serverModelId: '',
+        baseUrl: '',
+        apiKey: '',
     });
     const [showApi, setShowApi] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     /** Read stored auth token (same helper used by ModelConfiguration.tsx) */
     const getAuthHeader = (): Record<string, string> => {
@@ -53,6 +49,41 @@ export function OnPremDialog({ isOpen, onClose, onSave }: OnPremDialogProps) {
             return { Authorization: `${tokenType} ${token}`.trim() };
         } catch { return {}; }
     };
+
+    /** Fetch existing config from backend whenever dialog opens */
+    useEffect(() => {
+        if (!isOpen) return;
+        const fetchConfig = async () => {
+            setIsLoading(true);
+            try {
+                const res = await fetch(API_ENDPOINTS.onprem.getConfig(), {
+                    cache: 'no-store',
+                    headers: {
+                        Accept: 'application/json',
+                        'Cache-Control': 'no-cache',
+                        ...getAuthHeader()
+                    },
+                    credentials: 'include',
+                });
+                if (!res.ok) return;
+                const data = await res.json().catch(() => null);
+                if (!data) return;
+                // Extract only the fields this dialog needs
+                setConfig({
+                    modelId: data.model_id ?? data.modelId ?? '',
+                    serverModelId: data.server_model_id ?? data.serverModelId ?? '',
+                    baseUrl: data.base_url ?? data.baseUrl ?? '',
+                    apiKey: data.api_key ?? data.apiKey ?? '',
+                });
+            } catch (err) {
+                console.warn('[OnPremDialog] Could not load saved config:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchConfig();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
 
     const handleSave = async () => {
         if (!config.modelId.trim() || !config.baseUrl.trim()) {
@@ -82,60 +113,73 @@ export function OnPremDialog({ isOpen, onClose, onSave }: OnPremDialogProps) {
                 throw new Error(err?.detail || err?.message || `HTTP ${response.status}`);
             }
 
-            // Also create the model so it immediately appears in the selector
+            // Create the model only if it is not already registered
             try {
-                const createPayload = {
-                    id: config.modelId,
-                    name: config.modelId,
-                    base_model_id: null,
-                    params: {},
-                    meta: {
-                        profile_image_url: '/static/favicon.png',
-                        description: 'On-Premise Model',
-                        capabilities: {
-                            file_context: true,
-                            vision: true,
-                            file_upload: true,
-                            web_search: true,
-                            image_generation: true,
-                            code_interpreter: true,
-                            citations: true,
-                            status_updates: true,
-                            builtin_tools: true,
-                        },
-                        suggestion_prompts: null,
-                        tags: [],
-                    },
-                    is_active: true,
-                    active: true,
-                    connection_type: 'external',
-                    context_window: 4096,
-                    max_completion_tokens: 4096,
-                    created: Math.floor(Date.now() / 1000),
-                    object: 'model',
-                    owned_by: 'openai',
-                    public_apps: null,
-                    urlIdx: 0,
-                    openai: {
+                // Fetch existing models to check for duplicates
+                const listRes = await fetch(API_ENDPOINTS.models.list(), {
+                    headers: { Accept: 'application/json', ...getAuthHeader() },
+                    credentials: 'include',
+                });
+                const existingModels: any[] = listRes.ok ? (await listRes.json()) : [];
+                const alreadyExists = Array.isArray(existingModels) &&
+                    existingModels.some((m: any) => m.id === config.modelId || m.name === config.modelId);
+
+                if (alreadyExists) {
+                    console.log(`Model "${config.modelId}" is already registered — skipping create.`);
+                } else {
+                    const createPayload = {
                         id: config.modelId,
-                        object: 'model',
-                        created: Math.floor(Date.now() / 1000),
-                        owned_by: 'openai',
+                        name: config.modelId,
+                        base_model_id: null,
+                        params: {},
+                        meta: {
+                            profile_image_url: '/static/favicon.png',
+                            description: 'On-Premise Model',
+                            capabilities: {
+                                file_context: true,
+                                vision: true,
+                                file_upload: true,
+                                web_search: true,
+                                image_generation: true,
+                                code_interpreter: true,
+                                citations: true,
+                                status_updates: true,
+                                builtin_tools: true,
+                            },
+                            suggestion_prompts: null,
+                            tags: [],
+                        },
+                        is_active: true,
                         active: true,
                         connection_type: 'external',
                         context_window: 4096,
                         max_completion_tokens: 4096,
-                    },
-                    access_control: null,
-                };
+                        created: Math.floor(Date.now() / 1000),
+                        object: 'model',
+                        owned_by: 'openai',
+                        public_apps: null,
+                        urlIdx: 0,
+                        openai: {
+                            id: config.modelId,
+                            object: 'model',
+                            created: Math.floor(Date.now() / 1000),
+                            owned_by: 'openai',
+                            active: true,
+                            connection_type: 'external',
+                            context_window: 4096,
+                            max_completion_tokens: 4096,
+                        },
+                        access_control: null,
+                    };
 
-                await fetch(API_ENDPOINTS.models.create(), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...getAuthHeader() },
-                    credentials: 'include',
-                    body: JSON.stringify(createPayload),
-                });
-                console.log('Successfully created model in backend');
+                    await fetch(API_ENDPOINTS.models.create(), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...getAuthHeader() },
+                        credentials: 'include',
+                        body: JSON.stringify(createPayload),
+                    });
+                    console.log('Successfully created model in backend');
+                }
             } catch (err) {
                 console.error('Failed to auto-create model', err);
             }
@@ -156,7 +200,7 @@ export function OnPremDialog({ isOpen, onClose, onSave }: OnPremDialogProps) {
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent
-                className="sm:max-w-[520px] bg-zinc-950 border-white/10 text-white backdrop-blur-xl"
+                className="sm:max-w-[520px] bg-zinc-950 border-white/10 text-white backdrop-blur-xl max-h-[90vh] flex flex-col"
                 onOpenAutoFocus={(e) => e.preventDefault()}
             >
                 <DialogHeader>
@@ -169,7 +213,13 @@ export function OnPremDialog({ isOpen, onClose, onSave }: OnPremDialogProps) {
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6 py-4">
+                <div className="space-y-6 py-4 overflow-y-auto flex-1 pr-2 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20 hover:scrollbar-thumb-white/40">
+                    {/* Loading indicator */}
+                    {isLoading && (
+                        <div className="text-xs text-zinc-400 italic text-center animate-pulse">
+                            Loading saved configuration...
+                        </div>
+                    )}
                     {/* Connection Details */}
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-white/90 border-b border-white/10 pb-2">
@@ -179,7 +229,7 @@ export function OnPremDialog({ isOpen, onClose, onSave }: OnPremDialogProps) {
                         {/* Model ID */}
                         <div className="space-y-2">
                             <Label htmlFor="onprem-model-id" className="text-sm text-zinc-300">
-                                Model ID
+                                Model Label
                             </Label>
                             <Input
                                 id="onprem-model-id"
@@ -193,7 +243,7 @@ export function OnPremDialog({ isOpen, onClose, onSave }: OnPremDialogProps) {
                         {/* Server Model ID */}
                         <div className="space-y-2">
                             <Label htmlFor="onprem-server-model-id" className="text-sm text-zinc-300">
-                                Server Model ID
+                                Model Name
                             </Label>
                             <Input
                                 id="onprem-server-model-id"
