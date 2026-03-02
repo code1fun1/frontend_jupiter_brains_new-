@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, GripVertical, Settings2, ExternalLink, Pencil, Image, Video, Server } from 'lucide-react';
+import { GripVertical, Settings2, ExternalLink, Pencil, Image, Video, Server } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { AIModel } from '@/types/chat';
@@ -767,16 +767,6 @@ export function ModelConfiguration({
                 }
               />
 
-              {!defaultModelIds.includes(model.id) && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => onRemoveModel(model.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
             </div>
           ))}
         </CardContent>
