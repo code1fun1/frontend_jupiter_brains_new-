@@ -74,6 +74,9 @@ export const API_ENDPOINTS = {
         updateConfig: () => `${getBackendBaseUrl()}/api/v1/onprem/config/update`,
         getConfig: () => `${getBackendBaseUrl()}/api/v1/onprem/config`,
     },
+    admin: {
+        dashboardDetails: () => `${getBackendBaseUrl()}/api/v1/admin/dashboard/details`,
+    },
 } as const;
 
 /**
