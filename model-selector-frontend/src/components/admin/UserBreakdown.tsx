@@ -395,6 +395,10 @@ export function UserBreakdown() {
         }
 
         const payload = { queries: [query] };
+
+        // Artificial delay for UI polish (1 second)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         const res = await fetch(API_ENDPOINTS.admin.dashboardDetails(), {
           method: 'POST',
           headers: {
@@ -666,9 +670,6 @@ export function UserBreakdown() {
                       <span>{option.icon}</span>
                       <span className="flex-1">{option.label}</span>
                       {activeFilter === option.id && <Check className="h-3 w-3 ml-auto" />}
-                      {API_BACKED_FILTERS.has(option.id) && (
-                        <span className="text-[10px] text-blue-400">live</span>
-                      )}
                     </button>
                   ))}
                 </div>

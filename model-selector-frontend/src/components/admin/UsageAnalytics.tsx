@@ -1,11 +1,10 @@
-import { TrendingUp, TrendingDown, DollarSign, Users, MessageSquare, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { TrendingUp, DollarSign, Users, MessageSquare } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
 } from '@/components/ui/chart';
 import {
   BarChart,
@@ -13,17 +12,15 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   Area,
   AreaChart,
 } from 'recharts';
+import { API_ENDPOINTS, getStoredBearerToken } from '@/utils/config';
 
-// Dummy data for analytics
+// Dummy data for charts (kept for now — only stat cards become live)
 const usageOverTimeData = [
   { month: 'Jan', credits: 4200, requests: 15000 },
   { month: 'Feb', credits: 5100, requests: 18500 },
@@ -59,35 +56,137 @@ const dailyUsageData = [
 ];
 
 const chartConfig = {
-  credits: {
-    label: 'Credits ($)',
-    color: 'hsl(0, 0%, 30%)',
-  },
-  requests: {
-    label: 'Requests',
-    color: 'hsl(0, 0%, 60%)',
-  },
-  usage: {
-    label: 'Usage ($)',
-    color: 'hsl(0, 0%, 40%)',
-  },
+  credits: { label: 'Credits ($)', color: 'hsl(0, 0%, 30%)' },
+  requests: { label: 'Requests', color: 'hsl(0, 0%, 60%)' },
+  usage: { label: 'Usage ($)', color: 'hsl(0, 0%, 40%)' },
 };
 
+interface OverviewStats {
+  total_tokens: number;
+  total_requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  avg_tokens_per_request: number;
+  total_unique_users?: number;
+}
+
 export function UsageAnalytics() {
+  const [stats, setStats] = useState<OverviewStats | null>(null);
+  const [modelData, setModelData] = useState<Array<{ name: string, value: number, color: string, percentage?: number }>>(modelUsageData);
+  const [reqTypeData, setReqTypeData] = useState<Array<{ type: string, count: number, percentage?: number }>>(requestTypeData);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = getStoredBearerToken();
+        const payload = {
+          queries: [
+            { query_type: 'overview', filters: {} },
+            { query_type: 'pivot', group_by: ['model_id'], order_by: 'total_requests', order_direction: 'desc', pivot_limit: 5, filters: {} },
+            { query_type: 'pivot', group_by: ['request_type'], order_by: 'total_requests', order_direction: 'desc', pivot_limit: 5, filters: {} },
+            { query_type: 'pivot', group_by: ['user_id'], filters: { limit: 10 } }
+          ]
+        };
+
+        // Artificial delay for UI polish (1 second)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const res = await fetch(API_ENDPOINTS.admin.dashboardDetails(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            ...(token ? { Authorization: token } : {}),
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`Server error ${res.status}`);
+        const json = await res.json();
+
+        const resultsArray = json?.results || [];
+
+        // 0: Overview & 3: User Pivot (for unique user count)
+        const overviewData = resultsArray[0]?.data?.results?.[0];
+        setStats({
+          total_tokens: Number(overviewData?.total_tokens) || 0,
+          total_requests: Number(overviewData?.total_requests) || 0,
+          input_tokens: Number(overviewData?.input_tokens) || 0,
+          output_tokens: Number(overviewData?.output_tokens) || 0,
+          avg_tokens_per_request: Number(overviewData?.avg_tokens_per_request) || 0,
+          total_unique_users: Number(resultsArray[3]?.data?.total_records) || 0,
+        });
+
+        // 1: Model Usage
+        let newModelData = modelUsageData;
+        const modelRows = resultsArray[1]?.data?.results || [];
+        if (modelRows.length > 0) {
+          const COLORS = ['hsl(0, 0%, 20%)', 'hsl(0, 0%, 40%)', 'hsl(0, 0%, 60%)', 'hsl(0, 0%, 80%)', 'hsl(0, 0%, 50%)'];
+          newModelData = modelRows.slice(0, 5).map((r: any, i: number) => ({
+            name: String(r.model_id),
+            value: Number(r.total_requests) || 0,
+            color: COLORS[i % COLORS.length]
+          }));
+        }
+
+        // 2: Request Type Breakdown
+        let newReqTypeData = requestTypeData;
+        const reqTypeRows = resultsArray[2]?.data?.results || [];
+        if (reqTypeRows.length > 0) {
+          newReqTypeData = reqTypeRows.slice(0, 5).map((r: any) => {
+            const rawType = String(r.request_type || 'unknown');
+            const formattedType = rawType.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            return {
+              type: formattedType,
+              count: Number(r.total_requests) || 0
+            };
+          });
+        }
+
+        const totalModelReqs = newModelData.reduce((acc, curr) => acc + curr.value, 0);
+        setModelData(newModelData.map(m => ({
+          ...m,
+          percentage: totalModelReqs > 0 ? Math.round((m.value / totalModelReqs) * 100) : 0
+        })));
+
+        const totalReqs = newReqTypeData.reduce((acc, curr) => acc + curr.count, 0);
+        setReqTypeData(newReqTypeData.map(r => ({
+          ...r,
+          percentage: totalReqs > 0 ? Math.round((r.count / totalReqs) * 100) : 0
+        })));
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load overview');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOverview();
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Total Tokens — from API */}
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Credits Used</p>
-                <p className="text-2xl font-bold">$7,234.50</p>
-                <div className="flex items-center gap-1 text-sm text-green-500">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>+12.5% from last month</span>
-                </div>
+                <p className="text-sm text-muted-foreground">Total Tokens</p>
+                <p className="text-2xl font-bold">
+                  {loading ? '—' : (stats?.total_tokens ?? 0).toLocaleString()}
+                </p>
+                {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+                {!loading && !error && (
+                  <div className="flex items-center gap-1 text-sm text-green-500">
+                    <TrendingUp className="h-3 w-3" />
+                    <span>Live data</span>
+                  </div>
+                )}
               </div>
               <div className="p-3 bg-accent rounded-full">
                 <DollarSign className="h-5 w-5 text-primary" />
@@ -96,16 +195,21 @@ export function UsageAnalytics() {
           </CardContent>
         </Card>
 
+        {/* Active Users — from API */}
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Active Users</p>
-                <p className="text-2xl font-bold">156</p>
-                <div className="flex items-center gap-1 text-sm text-green-500">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>+8 new this week</span>
-                </div>
+                <p className="text-2xl font-bold">
+                  {loading ? '—' : (stats?.total_unique_users ?? 0).toLocaleString()}
+                </p>
+                {!loading && !error && (
+                  <div className="flex items-center gap-1 text-sm text-green-500">
+                    <TrendingUp className="h-3 w-3" />
+                    <span>Live data</span>
+                  </div>
+                )}
               </div>
               <div className="p-3 bg-accent rounded-full">
                 <Users className="h-5 w-5 text-primary" />
@@ -114,16 +218,21 @@ export function UsageAnalytics() {
           </CardContent>
         </Card>
 
+        {/* Total Requests — from API */}
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Requests</p>
-                <p className="text-2xl font-bold">25,800</p>
-                <div className="flex items-center gap-1 text-sm text-green-500">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>+22.8% from last month</span>
-                </div>
+                <p className="text-2xl font-bold">
+                  {loading ? '—' : (stats?.total_requests ?? 0).toLocaleString()}
+                </p>
+                {!loading && !error && (
+                  <div className="flex items-center gap-1 text-sm text-green-500">
+                    <TrendingUp className="h-3 w-3" />
+                    <span>Live data</span>
+                  </div>
+                )}
               </div>
               <div className="p-3 bg-accent rounded-full">
                 <MessageSquare className="h-5 w-5 text-primary" />
@@ -132,6 +241,7 @@ export function UsageAnalytics() {
           </CardContent>
         </Card>
 
+        {/* IP Overrides — commented out
         <Card className="bg-card border-border">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -149,6 +259,7 @@ export function UsageAnalytics() {
             </div>
           </CardContent>
         </Card>
+        */}
       </div>
 
       {/* Charts Row 1 */}
@@ -188,7 +299,7 @@ export function UsageAnalytics() {
             <ChartContainer config={chartConfig} className="h-[250px]">
               <PieChart>
                 <Pie
-                  data={modelUsageData}
+                  data={modelData}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -196,7 +307,7 @@ export function UsageAnalytics() {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {modelUsageData.map((entry, index) => (
+                  {modelData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -204,14 +315,14 @@ export function UsageAnalytics() {
               </PieChart>
             </ChartContainer>
             <div className="flex flex-wrap justify-center gap-4 mt-4">
-              {modelUsageData.map((entry) => (
+              {modelData.map((entry) => (
                 <div key={entry.name} className="flex items-center gap-2">
                   <div
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: entry.color }}
                   />
                   <span className="text-sm text-muted-foreground">
-                    {entry.name} ({entry.value}%)
+                    {entry.name} ({entry.percentage ?? entry.value}%)
                   </span>
                 </div>
               ))}
