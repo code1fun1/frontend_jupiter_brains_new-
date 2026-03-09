@@ -415,8 +415,34 @@ export function UserBreakdown() {
         setApiTotalRecords(data?.total_records ?? 0);
 
         if (rows.length > 0) {
-          setApiColumns(Object.keys(rows[0]));
-          setApiRows(rows);
+          let finalRows = rows;
+
+          if (activeFilter === 'all') {
+            finalRows = rows.map((r: any) => {
+              let displayName = '';
+              if (r.user_name) {
+                displayName = String(r.user_name);
+              } else if (r.user_email) {
+                displayName = String(r.user_email).split('@')[0];
+              } else {
+                const rawId = String(r.user_id || 'Unknown');
+                if (rawId.startsWith('user_')) {
+                  const parts = rawId.split('_');
+                  displayName = parts.length > 2
+                    ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1)
+                    : rawId;
+                } else {
+                  displayName = rawId;
+                }
+              }
+
+              const { user_id, user_name, user_email, ...rest } = r;
+              return { User: displayName, ...rest };
+            });
+          }
+
+          setApiColumns(Object.keys(finalRows[0]));
+          setApiRows(finalRows);
         } else {
           setApiRows([]);
           setApiColumns([]);
@@ -471,13 +497,20 @@ export function UserBreakdown() {
     };
 
     if (activeFilter === 'all') {
-      xAxisKey = 'user_id';
+      xAxisKey = 'User';
       chartTitle = 'Top Users by Tokens';
       chartDesc = 'Top 5 users consuming the most tokens';
       currentChartData = apiRows.slice(0, 5).map(row => {
-        const rawId = String(row.user_id || 'Unknown');
-        const parts = rawId.split('_');
-        const label = parts.length > 1 ? parts[1] : rawId;
+        let label = String(row.User || 'Unknown');
+
+        // Compact visual labels for the chart specifically
+        if (label.includes('@')) {
+          label = label.split('@')[0];
+        } else if (label.startsWith('user_')) {
+          const parts = label.split('_');
+          label = parts.length > 1 ? parts[1] : label;
+        }
+
         return {
           [xAxisKey]: label,
           [yAxisKey]: Number(row.total_tokens) || 0,
