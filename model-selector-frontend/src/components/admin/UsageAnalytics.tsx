@@ -181,12 +181,6 @@ export function UsageAnalytics() {
                   {loading ? '—' : (stats?.total_tokens ?? 0).toLocaleString()}
                 </p>
                 {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
-                {!loading && !error && (
-                  <div className="flex items-center gap-1 text-sm text-green-500">
-                    <TrendingUp className="h-3 w-3" />
-                    <span>Live data</span>
-                  </div>
-                )}
               </div>
               <div className="p-3 bg-accent rounded-full">
                 <DollarSign className="h-5 w-5 text-primary" />
@@ -204,12 +198,6 @@ export function UsageAnalytics() {
                 <p className="text-2xl font-bold">
                   {loading ? '—' : (stats?.total_unique_users ?? 0).toLocaleString()}
                 </p>
-                {!loading && !error && (
-                  <div className="flex items-center gap-1 text-sm text-green-500">
-                    <TrendingUp className="h-3 w-3" />
-                    <span>Live data</span>
-                  </div>
-                )}
               </div>
               <div className="p-3 bg-accent rounded-full">
                 <Users className="h-5 w-5 text-primary" />
@@ -227,12 +215,6 @@ export function UsageAnalytics() {
                 <p className="text-2xl font-bold">
                   {loading ? '—' : (stats?.total_requests ?? 0).toLocaleString()}
                 </p>
-                {!loading && !error && (
-                  <div className="flex items-center gap-1 text-sm text-green-500">
-                    <TrendingUp className="h-3 w-3" />
-                    <span>Live data</span>
-                  </div>
-                )}
               </div>
               <div className="p-3 bg-accent rounded-full">
                 <MessageSquare className="h-5 w-5 text-primary" />
@@ -341,7 +323,7 @@ export function UsageAnalytics() {
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[250px]">
-              <BarChart data={requestTypeData} layout="vertical">
+              <BarChart data={reqTypeData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
                 <XAxis type="number" stroke="hsl(0, 0%, 50%)" />
                 <YAxis dataKey="type" type="category" stroke="hsl(0, 0%, 50%)" width={100} />
