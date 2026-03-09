@@ -91,7 +91,7 @@ export default function Admin() {
 
       <div className="mx-auto max-w-6xl px-4 py-6">
         <Tabs defaultValue="overview">
-          <TabsList className="grid w-full grid-cols-5 bg-muted/50">
+          <TabsList className="grid w-full grid-cols-3 bg-muted/50">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Overview</span>
@@ -100,18 +100,18 @@ export default function Admin() {
               <Settings className="h-4 w-4" />
               <span className="hidden sm:inline">Models</span>
             </TabsTrigger>
-            <TabsTrigger value="budget" className="flex items-center gap-2">
+            {/* <TabsTrigger value="budget" className="flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
               <span className="hidden sm:inline">Budget</span>
-            </TabsTrigger>
+            </TabsTrigger> */}
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Users</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="flex items-center gap-2">
+            {/* <TabsTrigger value="security" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">IP Risk</span>
-            </TabsTrigger>
+            </TabsTrigger> */}
           </TabsList>
 
           <div className="mt-6">
@@ -128,17 +128,17 @@ export default function Admin() {
               />
             </TabsContent>
 
-            <TabsContent value="budget" className="mt-0">
+            {/* <TabsContent value="budget" className="mt-0">
               <BudgetConfiguration />
-            </TabsContent>
+            </TabsContent> */}
 
             <TabsContent value="users" className="mt-0">
               <UserBreakdown />
             </TabsContent>
 
-            <TabsContent value="security" className="mt-0">
+            {/* <TabsContent value="security" className="mt-0">
               <IPRiskAnalytics />
-            </TabsContent>
+            </TabsContent> */}
           </div>
         </Tabs>
       </div>

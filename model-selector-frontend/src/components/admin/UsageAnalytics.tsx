@@ -74,6 +74,7 @@ export function UsageAnalytics() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [modelData, setModelData] = useState<Array<{ name: string, value: number, color: string, percentage?: number }>>(modelUsageData);
   const [reqTypeData, setReqTypeData] = useState<Array<{ type: string, count: number, percentage?: number }>>(requestTypeData);
+  const [tokenOverTimeData, setTokenOverTimeData] = useState<Array<{ date: string, total_tokens: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,7 +89,8 @@ export function UsageAnalytics() {
             { query_type: 'overview', filters: {} },
             { query_type: 'pivot', group_by: ['model_id'], order_by: 'total_requests', order_direction: 'desc', pivot_limit: 5, filters: {} },
             { query_type: 'pivot', group_by: ['request_type'], order_by: 'total_requests', order_direction: 'desc', pivot_limit: 5, filters: {} },
-            { query_type: 'pivot', group_by: ['user_id'], filters: { limit: 10 } }
+            { query_type: 'pivot', group_by: ['user_id'], filters: { limit: 10 } },
+            { query_type: 'pivot', group_by: ['date'], order_by: 'date', order_direction: 'asc', filters: { months: 1 } }
           ]
         };
 
@@ -157,6 +159,25 @@ export function UsageAnalytics() {
           ...r,
           percentage: totalReqs > 0 ? Math.round((r.count / totalReqs) * 100) : 0
         })));
+
+        // 4: Token Usage Over Time (monthly, grouped by date)
+        const timeRows: any[] = resultsArray[4]?.data?.results || [];
+        if (timeRows.length > 0) {
+          const parsed = [...timeRows]
+            .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+            .map((r: any) => {
+              const rawDate = String(r.date || '');
+              let label = rawDate;
+              if (rawDate.includes('-')) {
+                const d = new Date(rawDate);
+                if (!isNaN(d.getTime())) {
+                  label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                }
+              }
+              return { date: label, total_tokens: Number(r.total_tokens) || 0 };
+            });
+          setTokenOverTimeData(parsed);
+        }
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to load overview');
       } finally {
@@ -246,27 +267,37 @@ export function UsageAnalytics() {
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Credit Usage Over Time */}
+        {/* Token Usage Over Time */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg">Credit Usage Over Time</CardTitle>
-            <CardDescription>Monthly credit consumption in dollars</CardDescription>
+            <CardTitle className="text-lg">Token Usage Over Time</CardTitle>
+            <CardDescription>Daily token consumption over the past month</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[250px]">
-              <AreaChart data={usageOverTimeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
-                <XAxis dataKey="month" stroke="hsl(0, 0%, 50%)" />
-                <YAxis stroke="hsl(0, 0%, 50%)" />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Area
-                  type="monotone"
-                  dataKey="credits"
-                  stroke="hsl(0, 0%, 60%)"
-                  fill="hsl(0, 0%, 30%)"
-                  fillOpacity={0.3}
-                />
-              </AreaChart>
+              {loading ? (
+                <div className="flex items-center justify-center h-full gap-2 text-muted-foreground">
+                  <span className="text-sm">Loading chart…</span>
+                </div>
+              ) : tokenOverTimeData.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                  No data available for the past month.
+                </div>
+              ) : (
+                <AreaChart data={tokenOverTimeData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
+                  <XAxis dataKey="date" stroke="hsl(0, 0%, 50%)" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="hsl(0, 0%, 50%)" />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area
+                    type="monotone"
+                    dataKey="total_tokens"
+                    stroke="hsl(0, 0%, 60%)"
+                    fill="hsl(0, 0%, 30%)"
+                    fillOpacity={0.3}
+                  />
+                </AreaChart>
+              )}
             </ChartContainer>
           </CardContent>
         </Card>

@@ -280,12 +280,20 @@ const filterOptions: FilterOption[] = [
   { id: 'overview', label: 'Overview', icon: '🗂️' },
   { id: 'modelShare', label: 'Models Overview', icon: '🥧' },
   { id: 'requestTypes', label: 'Request Types', icon: '🗂️' },
-  { id: 'dailyTimeline', label: 'Daily Usage', icon: '�' },
+  //  { id: 'dailyTimeline', label: 'Daily Usage', icon: '�' },
+  { id: 'lastWeek', label: 'Last Week', icon: '📅' },
+  { id: 'lastMonth', label: 'Last Month', icon: '📅' },
+  { id: 'lastYear', label: 'Last Year', icon: '📅' },
+
+  { id: 'lastDay', label: 'Last Day', icon: '🗓️' },
+
+
+
 ];
 
 
 // Filters that hit the real backend (add more IDs here as APIs are built)
-const API_BACKED_FILTERS = new Set(['overview', 'all', 'modelShare', 'requestTypes', 'dailyTimeline']);
+const API_BACKED_FILTERS = new Set(['overview', 'all', 'modelShare', 'requestTypes', /* 'dailyTimeline', */ 'lastWeek', 'lastMonth', 'lastYear', 'lastDay', 'customRange']);
 
 // Preset limit options for the All Users filter
 const LIMIT_OPTIONS = [5, 10, 25, 50];
@@ -340,6 +348,31 @@ export function UserBreakdown() {
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // API Sort state
+  const [apiSortField, setApiSortField] = useState<string | null>(null);
+  const [apiSortDirection, setApiSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Custom date range state
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  // Draft values (what user is typing)
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  // Applied values (committed on Apply click → triggers API)
+  const [appliedStartDate, setAppliedStartDate] = useState('');
+  const [appliedEndDate, setAppliedEndDate] = useState('');
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  // Close calendar on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
+        setCalendarOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -351,8 +384,10 @@ export function UserBreakdown() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Fetch from API whenever active filter or limit changes
+  // Fetch from API whenever active filter, limit, or custom dates change
   useEffect(() => {
+    // For customRange: only fires when both applied dates are set
+    if (activeFilter === 'customRange' && (!appliedStartDate || !appliedEndDate)) return;
     if (!API_BACKED_FILTERS.has(activeFilter)) {
       setApiRows([]);
       setApiColumns([]);
@@ -381,14 +416,65 @@ export function UserBreakdown() {
             pivot_limit: 10,
             filters: {}
           };
-        } else if (activeFilter === 'dailyTimeline') {
+          // } else if (activeFilter === 'dailyTimeline') {
+          //   query = {
+          //     query_type: 'pivot',
+          //     group_by: ['date'],
+          //     order_by: 'total_requests',
+          //     order_direction: 'desc',
+          //     pivot_limit: 30,
+          //     filters: { days: 30 }
+          //   };
+        } else if (activeFilter === 'lastWeek') {
           query = {
             query_type: 'pivot',
             group_by: ['date'],
-            order_by: 'total_requests',
+            order_by: 'date',
             order_direction: 'desc',
-            pivot_limit: 30,
-            filters: { days: 30 }
+            filters: { days: 7 }
+          };
+        } else if (activeFilter === 'lastMonth') {
+          query = {
+            query_type: 'pivot',
+            group_by: ['date'],
+            order_by: 'date',
+            order_direction: 'desc',
+            filters: { months: 1 }
+          };
+        } else if (activeFilter === 'lastYear') {
+          query = {
+            query_type: 'pivot',
+            group_by: ['date'],
+            order_by: 'date',
+            order_direction: 'desc',
+            filters: { months: 12 }
+          };
+        } else if (activeFilter === 'lastDay') {
+          // Compute dynamic dates: end_date = today, start_date = yesterday
+          const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+          const today = new Date();
+          const yesterday = new Date(today);
+          yesterday.setDate(today.getDate() - 1);
+          query = {
+            query_type: 'pivot',
+            group_by: ['date'],
+            order_by: 'date',
+            order_direction: 'desc',
+            filters: {
+              start_date: toDateStr(yesterday),
+              end_date: toDateStr(today),
+            }
+          };
+        } else if (activeFilter === 'customRange') {
+          query = {
+            query_type: 'pivot',
+            group_by: ['date'],
+            order_by: 'date',
+            order_direction: 'desc',
+            filters: {
+              start_date: appliedStartDate,
+              end_date: appliedEndDate,
+            }
           };
         } else {
           query = { query_type: activeFilter, filters: {} };
@@ -437,7 +523,11 @@ export function UserBreakdown() {
               }
 
               const { user_id, user_name, user_email, ...rest } = r;
-              return { User: displayName, ...rest };
+              return {
+                User: displayName,
+                Email: user_email ? String(user_email) : 'N/A',
+                ...rest
+              };
             });
           }
 
@@ -455,7 +545,7 @@ export function UserBreakdown() {
     };
 
     fetchFilterData();
-  }, [activeFilter, userStatsLimit]);
+  }, [activeFilter, userStatsLimit, appliedStartDate, appliedEndDate]);
 
   // Mock-data derived values
   const filteredUsers = userData
@@ -482,12 +572,47 @@ export function UserBreakdown() {
   const totalOverrides = userData.reduce((sum, user) => sum + user.overrides, 0);
   const isApiBacked = API_BACKED_FILTERS.has(activeFilter);
 
+  // Derived filtered & sorted API rows
+  const filteredApiRows = apiRows.filter(row => {
+    if (!searchQuery) return true;
+    const lowerQuery = searchQuery.toLowerCase();
+    // Stringify every Object value and check if includes query
+    return Object.values(row).some(val => String(val).toLowerCase().includes(lowerQuery));
+  });
+
+  const sortedApiRows = [...filteredApiRows].sort((a, b) => {
+    if (!apiSortField) return 0;
+
+    // For general API tables, if we have numbers, sort numerically. Otherwise, localeCompare.
+    const valA = a[apiSortField];
+    const valB = b[apiSortField];
+
+    if (typeof valA === 'number' && typeof valB === 'number') {
+      return apiSortDirection === 'asc' ? valA - valB : valB - valA;
+    }
+
+    const strA = String(valA || '');
+    const strB = String(valB || '');
+    return apiSortDirection === 'asc'
+      ? strA.localeCompare(strB)
+      : strB.localeCompare(strA);
+  });
+
+  const handleApiSort = (field: string) => {
+    if (apiSortField === field) {
+      setApiSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setApiSortField(field);
+      setApiSortDirection('desc'); // Default to sorting descending first (e.g., highest usages first)
+    }
+  };
+
   // Dynamic Chart Logic
   let xAxisKey = 'name';
   let yAxisKey = 'credits';
-  let chartTitle = 'Top Users by Credit Usage';
-  let chartDesc = 'Top 5 users consuming the most credits';
-  let currentChartData: Record<string, string | number>[] = topUsersChartData;
+  let chartTitle = isApiBacked ? 'Live Data' : 'Top Users by Credit Usage';
+  let chartDesc = isApiBacked ? 'Loading...' : 'Top 5 users consuming the most credits';
+  let currentChartData: Record<string, string | number>[] = isApiBacked ? [] : topUsersChartData;
   let currentChartConfig: Record<string, { label: string; color: string }> = chartConfig;
 
   if (isApiBacked && apiRows.length > 0) {
@@ -536,20 +661,40 @@ export function UserBreakdown() {
           [yAxisKey]: Number(row.total_tokens) || 0,
         }
       });
-    } else if (activeFilter === 'dailyTimeline') {
+    } else if (/* activeFilter === 'dailyTimeline' || */ activeFilter === 'lastWeek' || activeFilter === 'lastMonth' || activeFilter === 'lastYear' || activeFilter === 'lastDay' || activeFilter === 'customRange') {
       xAxisKey = 'date';
-      chartTitle = 'Daily Token Usage';
-      chartDesc = 'Token usage over the last 7 active days';
-      // timeline might not be strictly chronological if ordered by tokens. Re-sort by date asc.
-      currentChartData = [...apiRows].sort((a, b) => Number(a.date) - Number(b.date)).slice(-7).map(row => {
-        const rawDate = Number(row.date);
-        const label = isUnixTimestamp(rawDate)
-          ? new Date(rawDate * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-          : String(rawDate || 'Unknown');
+      chartTitle = activeFilter === 'lastYear' ? 'Last Year Token Usage'
+        : activeFilter === 'lastMonth' ? 'Last Month Token Usage'
+          : activeFilter === 'lastWeek' ? 'Last Week Token Usage'
+            : activeFilter === 'lastDay' ? 'Yesterday Token Usage'
+              : activeFilter === 'customRange' ? `Custom Range: ${customStartDate} → ${customEndDate}`
+                : 'Daily Token Usage';
+      chartDesc = activeFilter === 'lastDay' ? 'Token usage for yesterday'
+        : activeFilter === 'customRange' ? `Token usage for selected date range`
+          : activeFilter === 'lastYear' ? 'Token usage over the last 12 months'
+            : `Token usage over the last ${activeFilter === 'lastWeek' ? 7 : 30} days`;
+
+      currentChartData = [...apiRows].sort((a, b) => {
+        const dateA = String(a.date || '');
+        const dateB = String(b.date || '');
+        return dateA.localeCompare(dateB);
+      }).map(row => {
+        const rawDate = row.date;
+        let label = String(rawDate || 'Unknown');
+
+        if (typeof rawDate === 'number' && isUnixTimestamp(rawDate)) {
+          label = new Date(rawDate * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        } else if (typeof rawDate === 'string' && rawDate.includes('-')) {
+          const dateObj = new Date(rawDate);
+          if (!isNaN(dateObj.getTime())) {
+            label = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          }
+        }
+
         return {
           [xAxisKey]: label,
           [yAxisKey]: Number(row.total_tokens) || 0,
-        }
+        };
       });
     }
   }
@@ -600,14 +745,31 @@ export function UserBreakdown() {
           <CardDescription>{chartDesc}</CardDescription>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={currentChartConfig} className="h-[200px]">
-            <BarChart data={currentChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
-              <XAxis dataKey={xAxisKey} stroke="hsl(0, 0%, 50%)" />
-              <YAxis stroke="hsl(0, 0%, 50%)" />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey={yAxisKey} fill="hsl(0, 0%, 45%)" radius={[4, 4, 0, 0]} />
-            </BarChart>
+          <ChartContainer config={currentChartConfig} className="h-[250px]">
+            {apiLoading && isApiBacked ? (
+              <div className="flex items-center justify-center h-full gap-2 text-muted-foreground">
+                <span className="text-sm">Loading chart…</span>
+              </div>
+            ) : currentChartData.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                No data available.
+              </div>
+            ) : (
+              <BarChart data={currentChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
+                <XAxis
+                  dataKey={xAxisKey}
+                  stroke="hsl(0, 0%, 50%)"
+                  tick={{ fontSize: 11 }}
+                  angle={-90}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis stroke="hsl(0, 0%, 50%)" />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey={yAxisKey} fill="hsl(0, 0%, 45%)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            )}
           </ChartContainer>
         </CardContent>
       </Card>
@@ -636,7 +798,6 @@ export function UserBreakdown() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 bg-background"
-                disabled={isApiBacked}
               />
             </div>
 
@@ -681,8 +842,9 @@ export function UserBreakdown() {
               >
                 <SlidersHorizontal className="h-4 w-4" />
                 <span className="hidden sm:inline">
-                  {filterOptions.find(f => f.id === activeFilter)?.icon}{' '}
-                  {filterOptions.find(f => f.id === activeFilter)?.label}
+                  {activeFilter === 'customRange'
+                    ? `📅 ${customStartDate} → ${customEndDate}`
+                    : `${filterOptions.find(f => f.id === activeFilter)?.icon} ${filterOptions.find(f => f.id === activeFilter)?.label}`}
                 </span>
                 <ChevronDown className={`h-3 w-3 transition-transform ${filterOpen ? 'rotate-180' : ''}`} />
               </Button>
@@ -708,6 +870,77 @@ export function UserBreakdown() {
                 </div>
               )}
             </div>
+
+            {/* Calendar / Custom Date Range button */}
+            <div className="relative" ref={calendarRef}>
+              <Button
+                variant={activeFilter === 'customRange' ? 'default' : 'outline'}
+                size="sm"
+                className="flex items-center gap-2 border-border bg-background hover:bg-accent"
+                onClick={() => setCalendarOpen(prev => !prev)}
+                title="Custom date range"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <span className="hidden sm:inline text-xs">Custom</span>
+              </Button>
+
+              {calendarOpen && (
+                <div className="absolute right-0 mt-2 w-64 rounded-md border border-border bg-card shadow-lg z-50 p-3 space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Custom Date Range</p>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Start Date</label>
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">End Date</label>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        min={customStartDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="w-full text-sm bg-background border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full h-8"
+                    disabled={!customStartDate || !customEndDate || customEndDate < customStartDate}
+                    onClick={() => {
+                      setAppliedStartDate(customStartDate);
+                      setAppliedEndDate(customEndDate);
+                      setActiveFilter('customRange');
+                      setCalendarOpen(false);
+                    }}
+                  >
+                    Apply Range
+                  </Button>
+                  {activeFilter === 'customRange' && (
+                    <button
+                      className="w-full text-xs text-muted-foreground hover:text-foreground text-center py-1"
+                      onClick={() => {
+                        setCustomStartDate('');
+                        setCustomEndDate('');
+                        setAppliedStartDate('');
+                        setAppliedEndDate('');
+                        setActiveFilter('all');
+                        setCalendarOpen(false);
+                      }}
+                    >
+                      Clear &amp; reset to All Users
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── API-backed dynamic table ─────────────────────────── */}
@@ -725,27 +958,34 @@ export function UserBreakdown() {
                   <span>{apiError}</span>
                 </div>
               )}
-              {!apiLoading && !apiError && apiRows.length === 0 && (
+              {!apiLoading && !apiError && sortedApiRows.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground text-sm">
-                  No data returned for this filter.
+                  No data matches your search for this filter.
                 </div>
               )}
-              {!apiLoading && !apiError && apiRows.length > 0 && (
+              {!apiLoading && !apiError && sortedApiRows.length > 0 && (
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
                       {apiColumns.map(col => (
-                        <th
-                          key={col}
-                          className="text-left py-3 px-2 text-sm font-medium text-muted-foreground whitespace-nowrap"
-                        >
-                          {formatColumnHeader(col)}
+                        <th key={col} className="text-left py-3 px-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto p-0 text-sm font-medium text-muted-foreground hover:text-foreground whitespace-nowrap"
+                            onClick={() => handleApiSort(col)}
+                          >
+                            {formatColumnHeader(col)}
+                            {apiSortField === col && (
+                              <ArrowUpDown className="ml-1 h-3 w-3" />
+                            )}
+                          </Button>
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {apiRows.map((row, rowIdx) => (
+                    {sortedApiRows.map((row, rowIdx) => (
                       <tr key={rowIdx} className="border-b border-border/50 hover:bg-accent/30">
                         {apiColumns.map(col => (
                           <td key={col} className="py-3 px-2 text-sm">
