@@ -778,15 +778,7 @@ export function UserBreakdown() {
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-lg">User Details</CardTitle>
-          <CardDescription>
-            {isApiBacked
-              ? activeFilter === 'all'
-                ? `Live data — All Users (top ${userStatsLimit})`
-                : (activeFilter === 'modelShare' || activeFilter === 'requestTypes')
-                  ? `Live data — ${filterOptions.find(f => f.id === activeFilter)?.label} (top 10)`
-                  : `Live data — ${filterOptions.find(f => f.id === activeFilter)?.label}`
-              : 'Complete breakdown of user activity'}
-          </CardDescription>
+          <CardDescription />
         </CardHeader>
         <CardContent>
           {/* Search + Filter row */}

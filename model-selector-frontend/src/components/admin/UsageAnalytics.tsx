@@ -72,9 +72,10 @@ interface OverviewStats {
 
 export function UsageAnalytics() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
-  const [modelData, setModelData] = useState<Array<{ name: string, value: number, color: string, percentage?: number }>>(modelUsageData);
-  const [reqTypeData, setReqTypeData] = useState<Array<{ type: string, count: number, percentage?: number }>>(requestTypeData);
+  const [modelData, setModelData] = useState<Array<{ name: string, value: number, color: string, percentage?: number }>>([]);
+  const [reqTypeData, setReqTypeData] = useState<Array<{ type: string, count: number, percentage?: number }>>([]);
   const [tokenOverTimeData, setTokenOverTimeData] = useState<Array<{ date: string, total_tokens: number }>>([]);
+  const [dailyPatternData, setDailyPatternData] = useState<Array<{ day: string, usage: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,10 +124,10 @@ export function UsageAnalytics() {
         });
 
         // 1: Model Usage
-        let newModelData = modelUsageData;
+        let newModelData: typeof modelUsageData = [];
         const modelRows = resultsArray[1]?.data?.results || [];
         if (modelRows.length > 0) {
-          const COLORS = ['hsl(0, 0%, 20%)', 'hsl(0, 0%, 40%)', 'hsl(0, 0%, 60%)', 'hsl(0, 0%, 80%)', 'hsl(0, 0%, 50%)'];
+          const COLORS = ['hsl(0, 0%, 20%)', 'hsl(0, 0%, 40%)', 'hsl(0, 0%, 60%)', 'hsl(0, 0%, 80%)', 'hsl(0, 0%, 50%)']
           newModelData = modelRows.slice(0, 5).map((r: any, i: number) => ({
             name: String(r.model_id),
             value: Number(r.total_requests) || 0,
@@ -135,7 +136,7 @@ export function UsageAnalytics() {
         }
 
         // 2: Request Type Breakdown
-        let newReqTypeData = requestTypeData;
+        let newReqTypeData: typeof requestTypeData = [];
         const reqTypeRows = resultsArray[2]?.data?.results || [];
         if (reqTypeRows.length > 0) {
           newReqTypeData = reqTypeRows.slice(0, 5).map((r: any) => {
@@ -177,6 +178,19 @@ export function UsageAnalytics() {
               return { date: label, total_tokens: Number(r.total_tokens) || 0 };
             });
           setTokenOverTimeData(parsed);
+
+          // Aggregate by day-of-week for the Daily Usage Pattern chart
+          const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const dow: Record<string, number> = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+          timeRows.forEach((r: any) => {
+            const d = new Date(String(r.date || ''));
+            if (!isNaN(d.getTime())) {
+              const name = DAY_NAMES[d.getDay()];
+              dow[name] = (dow[name] || 0) + (Number(r.total_tokens) || 0);
+            }
+          });
+          const orderedDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          setDailyPatternData(orderedDays.map(day => ({ day, usage: dow[day] || 0 })));
         }
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to load overview');
@@ -310,36 +324,44 @@ export function UsageAnalytics() {
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[250px]">
-              <PieChart>
-                <Pie
-                  data={modelData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {modelData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <ChartTooltip content={<ChartTooltipContent />} />
-              </PieChart>
+              {loading ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading chart…</div>
+              ) : modelData.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">No data available.</div>
+              ) : (
+                <PieChart>
+                  <Pie
+                    data={modelData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {modelData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              )}
             </ChartContainer>
-            <div className="flex flex-wrap justify-center gap-4 mt-4">
-              {modelData.map((entry) => (
-                <div key={entry.name} className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: entry.color }}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {entry.name} ({entry.percentage ?? entry.value}%)
-                  </span>
-                </div>
-              ))}
-            </div>
+            {modelData.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-4 mt-4">
+                {modelData.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {entry.name} ({entry.percentage ?? entry.value}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -354,13 +376,19 @@ export function UsageAnalytics() {
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[250px]">
-              <BarChart data={reqTypeData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
-                <XAxis type="number" stroke="hsl(0, 0%, 50%)" />
-                <YAxis dataKey="type" type="category" stroke="hsl(0, 0%, 50%)" width={100} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="count" fill="hsl(0, 0%, 40%)" radius={[0, 4, 4, 0]} />
-              </BarChart>
+              {loading ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading chart…</div>
+              ) : reqTypeData.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">No data available.</div>
+              ) : (
+                <BarChart data={reqTypeData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
+                  <XAxis type="number" stroke="hsl(0, 0%, 50%)" />
+                  <YAxis dataKey="type" type="category" stroke="hsl(0, 0%, 50%)" width={100} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" fill="hsl(0, 0%, 40%)" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              )}
             </ChartContainer>
           </CardContent>
         </Card>
@@ -373,13 +401,19 @@ export function UsageAnalytics() {
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[250px]">
-              <BarChart data={dailyUsageData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
-                <XAxis dataKey="day" stroke="hsl(0, 0%, 50%)" />
-                <YAxis stroke="hsl(0, 0%, 50%)" />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="usage" fill="hsl(0, 0%, 50%)" radius={[4, 4, 0, 0]} />
-              </BarChart>
+              {loading ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading chart…</div>
+              ) : dailyPatternData.length === 0 || dailyPatternData.every(d => d.usage === 0) ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">No data available.</div>
+              ) : (
+                <BarChart data={dailyPatternData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(0, 0%, 20%)" />
+                  <XAxis dataKey="day" stroke="hsl(0, 0%, 50%)" />
+                  <YAxis stroke="hsl(0, 0%, 50%)" />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="usage" fill="hsl(0, 0%, 50%)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              )}
             </ChartContainer>
           </CardContent>
         </Card>
