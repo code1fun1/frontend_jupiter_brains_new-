@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { User } from 'lucide-react';
 import { Message } from '@/types/chat';
 import { cn } from '@/lib/utils';
@@ -10,28 +12,6 @@ interface ChatMessageProps {
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const hasFiles = message.files && message.files.length > 0;
-
-  // Simple markdown parsing for basic formatting
-  const parseMarkdown = (text: string) => {
-    return text
-      .split('\n')
-      .map((line, i) => {
-        // Bold
-        line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        // Italic
-        line = line.replace(/\*(.*?)\*/g, '<em>$1</em>');
-        // Code
-        line = line.replace(/`(.*?)`/g, '<code class="bg-accent px-1 py-0.5 rounded text-sm">$1</code>');
-
-        return (
-          <span
-            key={i}
-            dangerouslySetInnerHTML={{ __html: line }}
-            className="block"
-          />
-        );
-      });
-  };
 
   return (
     <div
@@ -63,10 +43,57 @@ export function ChatMessage({ message }: ChatMessageProps) {
           </div>
         )}
 
-        {/* Text content — hidden when images are present */}
+        {/* Text content */}
         {message.content && !hasFiles && (
           <div className="prose prose-invert prose-sm max-w-none text-foreground leading-relaxed">
-            {parseMarkdown(message.content)}
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                // Headings
+                h1: ({ children }) => <h1 className="text-xl font-bold mt-4 mb-2 text-foreground">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-lg font-bold mt-3 mb-1.5 text-foreground">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-base font-semibold mt-2 mb-1 text-foreground">{children}</h3>,
+                // Lists
+                ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2 pl-2">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2 pl-2">{children}</ol>,
+                li: ({ children }) => <li className="text-foreground">{children}</li>,
+                // Paragraph
+                p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                // Inline code
+                code: ({ className, children, ...props }) => {
+                  const isBlock = className?.includes('language-');
+                  return isBlock ? (
+                    <code className={cn('block bg-zinc-800 border border-zinc-700 rounded-lg p-3 my-2 text-sm font-mono overflow-x-auto text-zinc-200 whitespace-pre', className)} {...props}>
+                      {children}
+                    </code>
+                  ) : (
+                    <code className="bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded text-sm font-mono text-violet-300" {...props}>
+                      {children}
+                    </code>
+                  );
+                },
+                // Code block wrapper
+                pre: ({ children }) => <pre className="my-2 overflow-x-auto">{children}</pre>,
+                // Blockquote
+                blockquote: ({ children }) => (
+                  <blockquote className="border-l-4 border-violet-500/50 pl-3 my-2 italic text-zinc-400">{children}</blockquote>
+                ),
+                // Links
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-400 underline underline-offset-2 hover:text-violet-300 transition-colors">
+                    {children}
+                  </a>
+                ),
+                // Horizontal rule
+                hr: () => <hr className="my-3 border-zinc-700" />,
+                // Strong / bold
+                strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                // Em / italic
+                em: ({ children }) => <em className="italic text-zinc-300">{children}</em>,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
           </div>
         )}
 
