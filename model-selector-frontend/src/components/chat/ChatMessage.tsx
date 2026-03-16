@@ -45,7 +45,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
         {/* Text content */}
         {message.content && !hasFiles && (
-          <div className="prose prose-invert prose-sm max-w-none text-foreground leading-relaxed">
+          <div className="text-foreground leading-relaxed text-sm">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -54,9 +54,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
                 h2: ({ children }) => <h2 className="text-lg font-bold mt-3 mb-1.5 text-foreground">{children}</h2>,
                 h3: ({ children }) => <h3 className="text-base font-semibold mt-2 mb-1 text-foreground">{children}</h3>,
                 // Lists
-                ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2 pl-2">{children}</ul>,
-                ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2 pl-2">{children}</ol>,
-                li: ({ children }) => <li className="text-foreground">{children}</li>,
+                ul: ({ children }) => <ul className="list-disc pl-6 space-y-1 my-2">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal pl-6 space-y-1 my-2">{children}</ol>,
+                li: ({ children }) => <li className="text-foreground leading-relaxed">{children}</li>,
                 // Paragraph
                 p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
                 // Inline code
