@@ -1,9 +1,46 @@
+import { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { User } from 'lucide-react';
+import { User, Copy, Check } from 'lucide-react';
 import { Message } from '@/types/chat';
 import { cn } from '@/lib/utils';
 import jupiterBrainsLogo from '@/assets/jupiter-brains-logo.png';
+
+// ── Code block with copy button ─────────────────────────────────────────────
+function CodeBlock({ language, children }: { language: string; children: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(children).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [children]);
+
+  return (
+    <div className="my-3 rounded-lg border border-zinc-700 overflow-hidden">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800 border-b border-zinc-700">
+        <span className="text-xs font-mono text-zinc-400">{language || 'code'}</span>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2 py-0.5 rounded hover:bg-zinc-700"
+          title="Copy code"
+        >
+          {copied ? (
+            <><Check className="h-3.5 w-3.5 text-green-400" /><span className="text-green-400">Copied!</span></>
+          ) : (
+            <><Copy className="h-3.5 w-3.5" /><span>Copy</span></>
+          )}
+        </button>
+      </div>
+      {/* Code body */}
+      <pre className="overflow-x-auto p-4 text-sm font-mono text-zinc-200 whitespace-pre bg-zinc-900">
+        <code>{children}</code>
+      </pre>
+    </div>
+  );
+}
 
 interface ChatMessageProps {
   message: Message;
@@ -59,21 +96,21 @@ export function ChatMessage({ message }: ChatMessageProps) {
                 li: ({ children }) => <li className="text-foreground leading-relaxed">{children}</li>,
                 // Paragraph
                 p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
-                // Inline code
+                // Code blocks — block vs inline
                 code: ({ className, children, ...props }) => {
                   const isBlock = className?.includes('language-');
-                  return isBlock ? (
-                    <code className={cn('block bg-zinc-800 border border-zinc-700 rounded-lg p-3 my-2 text-sm font-mono overflow-x-auto text-zinc-200 whitespace-pre', className)} {...props}>
-                      {children}
-                    </code>
-                  ) : (
+                  if (isBlock) {
+                    const lang = (className ?? '').replace('language-', '');
+                    return <CodeBlock language={lang}>{String(children).replace(/\n$/, '')}</CodeBlock>;
+                  }
+                  return (
                     <code className="bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded text-sm font-mono text-violet-300" {...props}>
                       {children}
                     </code>
                   );
                 },
-                // Code block wrapper
-                pre: ({ children }) => <pre className="my-2 overflow-x-auto">{children}</pre>,
+                // pre is suppressed — CodeBlock renders its own <pre>
+                pre: ({ children }) => <>{children}</>,
                 // Blockquote
                 blockquote: ({ children }) => (
                   <blockquote className="border-l-4 border-violet-500/50 pl-3 my-2 italic text-zinc-400">{children}</blockquote>
